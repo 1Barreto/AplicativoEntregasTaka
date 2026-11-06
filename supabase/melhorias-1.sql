@@ -169,9 +169,11 @@ begin
   return jsonb_build_object('ok', true, 'pedidos', v_n, 'cliente_novo', v_novo);
 end $$;
 
-revoke execute on function public._tel(text) from public;
+-- O Supabase libera tabelas e funções novas para todos por padrão: fechamos aqui
+revoke all on public.custos_produto, public.despesas from anon;
+revoke execute on function public._tel(text) from public, anon, authenticated;
 revoke execute on function public.loja_dados(), public.loja_conhece(text),
-  public.loja_pedido(text, text, text, text, jsonb, text) from public;
+  public.loja_pedido(text, text, text, text, jsonb, text) from public, anon, authenticated;
 grant execute on function public.loja_dados(), public.loja_conhece(text),
   public.loja_pedido(text, text, text, text, jsonb, text) to anon, authenticated;
 
@@ -181,3 +183,13 @@ grant execute on function public.loja_dados(), public.loja_conhece(text),
 do $$ begin
   alter publication supabase_realtime add table public.despesas, public.custos_produto;
 exception when duplicate_object then null; end $$;
+
+-- ---------------------------------------------------------------------
+-- 6. search_path fixo nas funções auxiliares (aviso do Supabase)
+-- ---------------------------------------------------------------------
+alter function public._quando(timestamptz) set search_path = public;
+alter function public._exigir(boolean, text) set search_path = public;
+alter function public.calcular_efeitos_mov() set search_path = public;
+alter function public.bloquear_alteracao() set search_path = public;
+alter function public.carimbar_atualizacao() set search_path = public;
+alter function public._tel(text) set search_path = public;
