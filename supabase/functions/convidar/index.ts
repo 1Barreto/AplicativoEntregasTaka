@@ -3,6 +3,8 @@
 // Sem senha: manda o e-mail de convite do Supabase para a pessoa criar a dela.
 // Só o admin ativo pode chamar, e só para um e-mail que já está na tabela convites
 // (o perfil nasce ativo com a função escolhida pelo gatilho ao_criar_usuario).
+// Com acao "excluir": apaga de vez a conta de quem ainda não tem histórico no app
+// (quem já trabalhou só pode ser desativado, para não perder o histórico).
 // Já publicada no projeto do Taka (Edge Functions › convidar).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -27,7 +29,24 @@ Deno.serve(async (req) => {
     const { data: perfil } = await admin.from('perfis').select('papel, ativo').eq('id', u.user.id).maybeSingle();
     if (!perfil || !perfil.ativo || perfil.papel !== 'admin') return resp({ erro: 'Só o admin pode cadastrar a equipe.' }, 403);
 
-    const { email, senha, redirectTo } = await req.json();
+    const corpo = await req.json();
+    if (corpo.acao === 'excluir') {
+      const id = String(corpo.id || '');
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return resp({ erro: 'Pessoa inválida.' }, 400);
+      if (id === u.user.id) return resp({ erro: 'Você não pode excluir a sua própria conta.' }, 400);
+      const { data: alvo } = await admin.from('perfis').select('email').eq('id', id).maybeSingle();
+      if (!alvo) return resp({ erro: 'Pessoa não encontrada.' }, 404);
+      const { error: ep } = await admin.from('perfis').delete().eq('id', id);
+      if (ep) {
+        const hist = ep.code === '23503';
+        return resp({ erro: hist ? 'Essa pessoa já tem histórico no app (entregas, vendas ou estoque). Desative o acesso em vez de excluir.' : ep.message, historico: hist }, 400);
+      }
+      await admin.from('convites').delete().eq('email', alvo.email);
+      const { error: ed } = await admin.auth.admin.deleteUser(id);
+      if (ed) return resp({ erro: 'Perfil apagado, mas a conta de login não: ' + ed.message }, 500);
+      return resp({ ok: true });
+    }
+    const { email, senha, redirectTo } = corpo;
     const e = String(email || '').trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(e)) return resp({ erro: 'E-mail inválido.' }, 400);
     const { data: convite } = await admin.from('convites').select('email, nome').eq('email', e).maybeSingle();
