@@ -34,6 +34,7 @@ export function lerValor(txt) {
   const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
 }
+export const pct = (v) => (Number.isFinite(v) ? v : 0).toLocaleString('pt-BR', { style: 'percent', maximumFractionDigits: 1 });
 export const valorParaCampo = (v) => (v === null || v === undefined) ? '' : Number(v).toFixed(2).replace('.', ',');
 // Busca sem acento e sem maiúsculas
 export const normalizar = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -57,6 +58,13 @@ export function telefoneInternacional(tel) {
 export function linkWhats(tel, msg = '') {
   const t = telefoneInternacional(tel);
   return `https://wa.me/${t}${msg ? '?text=' + encodeURIComponent(msg) : ''}`;
+}
+
+// ---------- Mapa ----------
+// Abre o endereço no Google Maps (app no celular, site no computador)
+export function linkMapa(c, cidade = '') {
+  const q = [c.endereco, c.bairro, cidade].map((x) => String(x || '').trim()).filter(Boolean).join(', ');
+  return q ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q) : '';
 }
 
 // ---------- Ícones (SVG fixos) ----------
@@ -84,6 +92,14 @@ const ICONES = {
   gota: '<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"/>',
   fechar: '<path d="M6 6l12 12M18 6L6 18"/>',
   celular: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+  mapa: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  loja: '<path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6"/>',
+  carteira: '<path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 7l12-4 1.5 4M16 13.5h2"/>',
+  alvo: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  compartilhar: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>',
+  calculadora: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18.5h.01M12 18.5h.01M16 18.5h.01"/>',
+  copiar: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+  calendario: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
 };
 export function icone(nome, cls = '') {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -116,6 +132,10 @@ export function folha(titulo, conteudo, { rodape, aoFechar } = {}) {
     aoFechar && aoFechar();
   };
   fundo.addEventListener('click', (e) => { if (e.target === fundo) fechar(); });
+  // Esc fecha a folha de cima (no computador)
+  const aoTeclar = (e) => { if (e.key === 'Escape' && !fechada && [...document.querySelectorAll('.folha-fundo:not(.saindo)')].pop() === fundo) { e.stopPropagation(); fechar(); } };
+  document.addEventListener('keydown', aoTeclar);
+  fundo.addEventListener('transitionend', () => document.removeEventListener('keydown', aoTeclar));
   painel.append(
     h('div', { class: 'folha-topo' },
       h('h2', {}, titulo),

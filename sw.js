@@ -1,10 +1,11 @@
 // Service worker: guarda os arquivos do app para abrir sem internet.
 // Ao publicar uma versão nova, aumente o número abaixo.
-const VERSAO = 'taka-v4';
+const VERSAO = 'taka-v5';
 const SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
 const ARQUIVOS = [
   './', './index.html', './manifest.json', './css/app.css',
-  './js/config.js', './js/app.js', './js/dados.js', './js/ui.js', './js/cadastros.js', './js/estoque.js', './js/entregas.js', './js/caixa.js', './js/pedidos.js',
+  './js/config.js', './js/app.js', './js/dados.js', './js/ui.js', './js/cadastros.js', './js/estoque.js', './js/entregas.js', './js/caixa.js', './js/pedidos.js', './js/financeiro.js',
+  './loja.html', './js/loja.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
   SUPABASE_CDN,
 ];
@@ -30,8 +31,11 @@ self.addEventListener('fetch', (e) => {
 
   // Mostra o que está guardado na hora e atualiza em segundo plano
   e.respondWith(caches.open(VERSAO).then(async (cache) => {
-    const chave = req.mode === 'navigate' ? './index.html' : req;
+    // Qualquer endereço do app abre o index.html; a loja online tem página própria
+    const ehLoja = url.pathname.endsWith('/loja.html');
+    const chave = req.mode === 'navigate' && !ehLoja ? './index.html' : req;
     const guardado = await cache.match(chave, { ignoreSearch: req.mode === 'navigate' });
+    if (ehLoja) return fetch(req).catch(() => guardado); // loja: sempre a versão mais nova
     const rede = fetch(req).then((resp) => {
       if (resp.ok) cache.put(chave, resp.clone());
       return resp;

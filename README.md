@@ -21,9 +21,12 @@ App instalável (PWA) para distribuidora de água mineral: estoque, retiradas, e
 | `js/estoque.js` | Estoque do depósito, histórico, carga do entregador, conferência |
 | `js/entregas.js` | Tela Entregar, fiado, cobrança no WhatsApp, vasilhames |
 | `js/caixa.js` | Fechamento de caixa e painel do dia |
-| `js/pedidos.js` | Pedidos, prováveis pedidos e relatórios com CSV |
+| `js/pedidos.js` | Pedidos, fila do entregador, prováveis pedidos e relatórios com CSV |
+| `js/financeiro.js` | Custo e lucro por galão, meta diária, contas a pagar e resultado do mês |
+| `loja.html`, `js/loja.js` | Loja online: página pública onde o cliente faz o pedido |
 | `sw.js`, `manifest.json`, `icons/` | Instalação e funcionamento offline |
 | `supabase/schema.sql` | Banco completo: tabelas, regras de acesso, funções |
+| `supabase/melhorias-1.sql` | Loja online, custos e contas a pagar (rodar depois do schema) |
 
 ## Andamento
 
@@ -32,6 +35,7 @@ App instalável (PWA) para distribuidora de água mineral: estoque, retiradas, e
 - [x] Etapa 3: entrega, fiado e vasilhames
 - [x] Etapa 4: fechamento de caixa e painel
 - [x] Etapa 5: pedidos, clientes recorrentes e relatórios
+- [x] Melhorias 1: loja online, custo e lucro por galão, meta diária, financeiro, fila com mapa, resumo no WhatsApp, visual novo
 
 ## Como colocar no ar
 

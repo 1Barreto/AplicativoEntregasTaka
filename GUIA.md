@@ -27,6 +27,8 @@ No fim tem uma parte sobre lançar o estoque e o fiado que você já tem hoje, e
 
 Esse arquivo cria todas as tabelas, as regras de quem pode ver e fazer o quê, e as funções do app. Rode só uma vez, num projeto novo.
 
+6. Depois, faça o mesmo com o arquivo [`supabase/melhorias-1.sql`](supabase/melhorias-1.sql): **New query**, cole tudo e **Run**. Ele liga a loja online, o custo e lucro por galão e o Financeiro. Pode rodar de novo sem problema. **Se você já tinha rodado o `schema.sql` antes, rode só este.**
+
 ### Ajustes de login (Authentication)
 
 Ainda no Supabase, no menu **Authentication**:
@@ -98,7 +100,11 @@ Sempre que alguém mudar algo no `main`, o site atualiza sozinho em 1 ou 2 minut
    - chave Pix e nome de quem recebe (vão na mensagem do botão Cobrar)
    - textos das mensagens de cobrança e de oferta
    - quantos dias antes avisar dos clientes recorrentes
+   - cidade (ajuda o botão Mapa a achar o endereço) e dias de trabalho no mês (para a meta diária)
+   - **Loja online**: ligue a chave, escreva um recado ou promoção e o WhatsApp do negócio. Use **Divulgar** para mandar o link aos clientes.
 5. Em **Mais › Produtos e preços**, confira os produtos, preços, se é retornável e o estoque mínimo de cada um.
+   Depois, em **Mais › Custo e lucro por galão**, use **Calcular custo** para saber quanto cada unidade custa de verdade (nota, frete, quebras e desgaste do vasilhame).
+   E em **Financeiro › Nova conta**, lance as contas do mês (aluguel, combustível, comissões). Marque "Repete todo mês" nas fixas: no mês seguinte um botão traz todas de uma vez.
 6. Em **Mais › Clientes**, cadastre os clientes (ou deixe a equipe cadastrar conforme for entregando).
 
 ## 5. Cadastrar a equipe
@@ -165,7 +171,8 @@ Nada no app é apagado. Para corrigir qualquer número, sempre se faz um novo aj
 1. **Início do turno**: o entregador abre **Minha carga › Iniciar turno** e marca o que pegou.
 2. **Na rua**: em **Entregar**, escolhe o cliente, a quantidade, os vazios recebidos e a forma de pagamento. Pedidos criados pela atendente aparecem no topo.
 3. **Fim do turno**: em **Minha carga › Devolver e encerrar**, marca o que voltou. O app confere se retirado = entregue + devolvido, mostra o dinheiro esperado e ele envia o fechamento com o dinheiro contado.
-4. **Admin**: o **Painel** mostra o dia, os fechamentos para confirmar e as diferenças. Em **Relatórios** dá para ver qualquer período e baixar planilhas.
+4. **Admin**: o **Painel** mostra o vendido, o lucro e a meta do dia, as contas vencendo, os fechamentos para confirmar e as diferenças. O botão **Resumo** manda o resumo do dia no WhatsApp. Em **Financeiro** fica o resultado do mês e as contas a pagar; em **Mais › Relatórios** dá para ver qualquer período e baixar planilhas.
+5. **Loja online**: o cliente abre o link, escolhe a quantidade e informa o telefone. Quem já é cliente é reconhecido pelo telefone; quem é novo é cadastrado na hora. O pedido aparece em **Pedidos** com a etiqueta *Loja online*, com aviso para o admin e a atendente, e o entregador vê a fila do dia com os botões **Mapa**, **Ligar** e **Zap**.
 
 ## Problemas comuns
 
@@ -177,4 +184,6 @@ Nada no app é apagado. Para corrigir qualquer número, sempre se faz um novo aj
 | O convite não chegou | Olhe o spam. O e-mail gratuito do Supabase tem limite por hora; espere e reenvie. |
 | No iPhone não aparece "Adicionar à Tela de Início" | Tem que ser no Safari, não no Chrome nem dentro do WhatsApp. |
 | O app não mostra a versão nova | Feche o app de vez e abra de novo com internet. |
+| "Falta rodar o arquivo supabase/melhorias-1.sql" | Rode o `supabase/melhorias-1.sql` no SQL Editor (parte 1, passo 6). |
+| A loja diz "Loja fechada no momento" | Ligue a loja em **Mais › Loja online e configurações** e salve. |
 | O projeto do Supabase foi pausado | O plano gratuito pausa depois de uma semana sem uso. Entre no Supabase e clique em **Restore**. Com uso diário isso não acontece. |

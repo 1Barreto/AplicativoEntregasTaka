@@ -83,6 +83,9 @@ const CONSULTAS = {
   vasilhames_total: () => sb.from('v_vasilhames_total').select('*'),
   pedidos: () => sb.from('pedidos').select('*').gte('criado_em', diasAtras(30)).order('criado_em', { ascending: false }),
   recorrentes: () => sb.from('v_recorrentes').select('*'),
+  // Só o admin recebe linhas destas duas (RLS). Antes de rodar supabase/melhorias-1.sql ficam vazias.
+  custos: () => sb.from('custos_produto').select('*'),
+  despesas: () => sb.from('despesas').select('*').gte('vencimento', diasAtras(400).slice(0, 10)).order('vencimento'),
 };
 function diasAtras(n) { return new Date(Date.now() - n * 864e5).toISOString(); }
 export function inicioDoDia(d = new Date()) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.toISOString(); }
@@ -95,6 +98,8 @@ const DEPENDENCIAS = {
   entregas: ['entregas_recentes', 'vendas_hoje', 'fiado', 'resumos', 'recorrentes'],
   pagamentos: ['fiado', 'resumos'],
   pedidos: ['pedidos'],
+  custos_produto: ['custos'],
+  despesas: ['despesas'],
 };
 export function registrarConsulta(nome, fn, tabelasOrigem = []) {
   CONSULTAS[nome] = fn;
