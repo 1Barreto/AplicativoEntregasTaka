@@ -1,6 +1,6 @@
 // Fechamento de caixa por entregador e painel do dia (admin).
 import * as D from './dados.js';
-import {
+import { entregasValidas,
   h, limpar, icone, toast, folha, campo, entrada, brl, lerValor, vazio, etiqueta, num, dataHora,
 } from './ui.js';
 import { nomePerfil } from './cadastros.js';
@@ -132,7 +132,7 @@ export function avisoFechamentos() {
 export function telaPainel(el, ctx) {
   const desenhar = () => {
     const vendas = D.tabela('vendas_hoje');
-    const entregasIds = new Set(vendas.map((v) => v.entrega_id));
+    const entregasIds = entregasValidas(vendas);
     const total = vendas.reduce((s, v) => s + n(v.valor), 0);
     const porForma = Object.fromEntries(Object.keys(FORMAS).map((f) => [f, vendas.filter((v) => v.forma_pagamento === f).reduce((s, v) => s + n(v.valor), 0)]));
     const unidades = vendas.reduce((s, v) => s + n(v.quantidade), 0);
@@ -167,6 +167,7 @@ export function telaPainel(el, ctx) {
         numero('Unidades', num(unidades), 'vendidas hoje', '#/relatorios'),
         numero('Fiado a receber', brl(fiadoTotal), 'total em aberto', '#/fiado'),
         numero('Vasilhames na rua', num(naRua), 'com clientes', '#/vasilhames')),
+      h('div', { class: 'colunas' },
       h('div', { class: 'cartao' }, h('h2', {}, 'Por forma de pagamento'),
         Object.entries(FORMAS).map(([k, t]) => barra(t, porForma[k], max, k === 'fiado' ? 'vermelho' : ''))),
       h('div', { class: 'cartao' }, h('h2', {}, 'Estoque no depósito'),
@@ -180,7 +181,7 @@ export function telaPainel(el, ctx) {
           h('div', { class: 'turno-topo' }, h('strong', {}, p.nome || p.email),
             turno ? (turno.encerrado_em ? etiqueta('Devolveu', 'amarelo') : etiqueta('Na rua', 'azul')) : etiqueta('Sem turno')),
           h('span', { class: 'suave' }, `Vendeu hoje ${brl(vendeu)}` + (carga.some((c) => c.cheios > 0) ? ' · carga: ' + carga.filter((c) => c.cheios > 0).map((c) => `${num(c.cheios)} ${c.produto}`).join(', ') : '')))) :
-          h('p', { class: 'suave' }, 'Nenhum entregador ativo.')));
+          h('p', { class: 'suave' }, 'Nenhum entregador ativo.'))));
   };
   desenhar();
   ctx.ao('dados', (x) => { if (['vendas_hoje', 'fiado', 'vasilhames_total', 'resumos', 'turnos', 'carga', 'saldo_deposito', 'perfis', 'pedidos', 'produtos'].includes(x)) desenhar(); });

@@ -666,7 +666,7 @@ end $$;
 -- Estorno de entrega lançada errada (admin): cria o lançamento inverso.
 create or replace function public.estornar_entrega(p_op uuid, p_entrega_id uuid, p_motivo text)
 returns uuid language plpgsql security definer set search_path = public as $$
-declare e entregas%rowtype; v_novo uuid := gen_random_uuid();
+declare e entregas%rowtype; v_novo uuid := gen_random_uuid(); v_fechado boolean;
 begin
   perform _exigir(eh_admin(), 'Só o admin estorna');
   perform _exigir(coalesce(trim(p_motivo),'') <> '', 'Informe o motivo');
@@ -683,10 +683,20 @@ begin
           -e.valor_total, e.id, p_motivo, now());
   insert into entrega_itens (entrega_id, produto_id, quantidade, preco_unitario, vazios_recebidos)
   select v_novo, produto_id, -quantidade, preco_unitario, -vazios_recebidos from entrega_itens where entrega_id = e.id;
+  -- Turno ainda aberto: os galões voltam para a carga do entregador.
+  -- Turno já devolvido/fechado: a carga dele já foi acertada, então voltam para o depósito.
+  select coalesce(t.encerrado_em is not null or t.status <> 'aberto', true) into v_fechado
+    from turnos t where t.id = e.turno_id;
+  v_fechado := coalesce(v_fechado, true);
   insert into movimentacoes (operacao_id, tipo, produto_id, dep_cheios, dep_vazios, ent_cheios, ent_vazios,
                              cli_vasilhames, entregador_id, cliente_id, turno_id, entrega_id, motivo)
-  select p_op, 'ajuste', produto_id, -dep_cheios, -dep_vazios, -ent_cheios, -ent_vazios,
-         -cli_vasilhames, entregador_id, cliente_id, turno_id, v_novo, 'Estorno: ' || p_motivo
+  select p_op, 'ajuste', produto_id,
+         case when v_fechado then -dep_cheios - ent_cheios else -dep_cheios end,
+         case when v_fechado then -dep_vazios - ent_vazios else -dep_vazios end,
+         case when v_fechado then 0 else -ent_cheios end,
+         case when v_fechado then 0 else -ent_vazios end,
+         -cli_vasilhames, case when v_fechado then null else entregador_id end, cliente_id,
+         case when v_fechado then null else turno_id end, v_novo, 'Estorno: ' || p_motivo
     from movimentacoes where entrega_id = e.id and tipo = 'venda';
   insert into pagamentos (operacao_id, cliente_id, entrega_id, turno_id, tipo, forma, valor, recebido_por,
                           motivo, estorno_de, ocorrido_em)

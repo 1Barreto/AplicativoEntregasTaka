@@ -2,7 +2,7 @@
 import * as D from './dados.js';
 import {
   h, limpar, icone, toast, folha, confirmar, campo, entrada, selecao, contador, escolha,
-  brl, normalizar, uuid, linkWhats, vazio, etiqueta, num, dataHora, baixarCsv, diasRelativo,
+  entregasValidas, brl, normalizar, uuid, linkWhats, vazio, etiqueta, num, dataHora, baixarCsv, diasRelativo,
 } from './ui.js';
 import { nomePerfil, detalheCliente } from './cadastros.js';
 import { produtosAtivos, TIPOS } from './estoque.js';
@@ -47,7 +47,7 @@ export function telaPedidos(el, ctx) {
   const lista = h('div', { class: 'lista' });
   const esc = escolha([['abertos', 'Abertos'], ['hoje', 'Entregues hoje'], ['cancelado', 'Cancelados']], filtro, (v) => { filtro = v; desenhar(); }, { classe: 'tres' });
   el.append(
-    ctx.perfil.papel === 'atendente' ? h('h1', {}, 'Pedidos') : null,
+    ...(ctx.perfil.papel === 'atendente' ? [h('h1', {}, 'Pedidos')] : []),
     h('button', { class: 'btn primario grande', onclick: () => formPedido(ctx) }, icone('mais'), 'Novo pedido'),
     esc.el, lista);
   const desenhar = () => {
@@ -263,13 +263,15 @@ export function telaRelatorios(el, ctx) {
     }
   }
 
+  let validas = new Set();
   function agrupar(linhas, chave, campos) {
     const m = new Map();
     for (const l of linhas) {
       const k = typeof chave === 'function' ? chave(l) : l[chave];
       const g = m.get(k) || Object.fromEntries(campos.map((c) => [c, 0]));
       for (const c of campos) g[c] += c === 'entregas' ? 0 : Number(l[c === 'valor' ? 'valor' : c] || 0);
-      (g._ids ||= new Set()).add(l.entrega_id);
+      g._ids ||= new Set();
+      if (validas.has(l.entrega_id)) g._ids.add(l.entrega_id);
       m.set(k, g);
     }
     return [...m.entries()].map(([k, g]) => ({ chave: k, ...g, entregas: g._ids.size }));
@@ -278,7 +280,8 @@ export function telaRelatorios(el, ctx) {
   function desenhar() {
     const { vendas, pagamentos, movs, turnos } = dados;
     const total = vendas.reduce((s, v) => s + Number(v.valor), 0);
-    const nEntregas = new Set(vendas.filter((v) => !v.eh_estorno).map((v) => v.entrega_id)).size;
+    validas = entregasValidas(vendas);
+    const nEntregas = validas.size;
     const porProduto = agrupar(vendas, 'produto', ['quantidade', 'valor']).sort((x, y) => y.valor - x.valor);
     const porEntregador = agrupar(vendas, 'entregador', ['quantidade', 'valor']).sort((x, y) => y.valor - x.valor);
     const porForma = Object.keys(FORMAS).map((f) => ({ f, valor: vendas.filter((v) => v.forma_pagamento === f).reduce((s, v) => s + Number(v.valor), 0) }));
@@ -302,6 +305,7 @@ export function telaRelatorios(el, ctx) {
         h('div', { class: 'numero' }, h('span', {}, 'Recebido'), h('strong', {}, brl(recebido)), h('small', {}, `inclui ${brl(recebidoFiado)} de fiado`)),
         h('div', { class: 'numero' }, h('span', {}, 'Vendido fiado'), h('strong', {}, brl(vendidoFiado)), h('small', {}, 'no período')),
         h('div', { class: 'numero' }, h('span', {}, 'A receber hoje'), h('strong', {}, brl(aReceber)), h('small', {}, 'fiado total em aberto'))),
+      h('div', { class: 'colunas' },
       h('div', { class: 'cartao' }, h('h2', {}, 'Por produto'),
         porProduto.length ? porProduto.map((x) => barra(`${x.chave} · ${num(x.quantidade)} un.`, x.valor, maxP)) : h('p', { class: 'suave' }, 'Sem vendas.')),
       h('div', { class: 'cartao' }, h('h2', {}, 'Por entregador'),
@@ -322,7 +326,7 @@ export function telaRelatorios(el, ctx) {
           h('button', { class: 'btn secundario', onclick: csvVendas }, 'Vendas (item a item)'),
           h('button', { class: 'btn secundario', onclick: csvPagamentos }, 'Pagamentos recebidos'),
           h('button', { class: 'btn secundario', onclick: csvMovs }, 'Movimentações de estoque'),
-          h('button', { class: 'btn secundario', onclick: csvFiado }, 'Fiado em aberto (hoje)'))),
+          h('button', { class: 'btn secundario', onclick: csvFiado }, 'Fiado em aberto (hoje)')))),
       h('div', { class: 'cartao' }, h('h2', {}, 'Entregas do período'),
         h('p', { class: 'suave pequeno' }, 'Para corrigir uma entrega lançada errada, toque nela e estorne. O estorno cria um lançamento inverso com o motivo.'),
         h('div', { class: 'lista' }, listaEntregas(vendas))));
@@ -353,7 +357,7 @@ export function telaRelatorios(el, ctx) {
     const motivo = h('textarea', { class: 'entrada', rows: 2, placeholder: 'Ex.: lançada no cliente errado' });
     const f = folha('Estornar entrega', [
       h('p', {}, `${e.cliente || 'Avulsa'} · ${brl(e.total)} ${FORMAS[e.forma_pagamento]} · ${dataHora(e.ocorrido_em)} · ${e.entregador}`),
-      h('p', { class: 'suave pequeno' }, 'Desfaz o efeito no estoque, no fiado e no caixa com um lançamento inverso. A entrega original continua no histórico.'),
+      h('p', { class: 'suave pequeno' }, 'Desfaz o efeito no fiado, nos vasilhames e no caixa com um lançamento inverso. Os galões voltam para a carga do entregador se o turno dele ainda estiver aberto; se já foi fechado, voltam para o depósito. A entrega original continua no histórico.'),
       campo('Motivo *', motivo),
     ], { rodape: [h('button', { class: 'btn perigo grande', onclick: async () => {
       if (!motivo.value.trim()) return toast('Informe o motivo.', 'erro');

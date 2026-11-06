@@ -335,3 +335,25 @@ a.item { color: inherit; text-decoration: none; }
 .tabela.compacta th { font-size: 12px; }
 .entrega-rel .linha-topo strong:last-child { white-space: nowrap; }
 .item.provavel .botoes-lado > * { flex: 1 1 0; min-width: 0; }
+
+/* ---------- Computador (tela larga) ---------- */
+.colunas > .cartao:last-child { margin-bottom: 0; }
+.colunas { margin-bottom: 14px; }
+@media (min-width: 1000px) {
+  :root { --lateral: 232px; }
+  .abas {
+    top: calc(var(--topo) + var(--seguro-topo)); right: auto; width: var(--lateral);
+    flex-direction: column; border-top: 0; border-right: 2px solid var(--borda); padding: 12px 0;
+  }
+  .aba { flex: none; flex-direction: row; justify-content: flex-start; gap: 14px; padding: 0 22px; min-height: 58px; font-size: 17px; }
+  .aba.ativa { box-shadow: inset 4px 0 0 var(--azul); }
+  #tela { margin: 0 0 0 var(--lateral); max-width: none; padding: 28px 36px 48px; }
+  #tela > * { max-width: 1160px; }
+  .colunas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .colunas > .cartao { margin: 0; }
+  .grade-numeros { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .escolha { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  #toasts { left: calc(var(--lateral) + 12px); bottom: 24px; }
+  .btn.confirmar { bottom: 16px; }
+  #tela:has(.btn.confirmar) > * { max-width: 760px; }
+}

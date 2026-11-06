@@ -233,3 +233,9 @@ export function digitando(el) {
   const a = document.activeElement;
   return !!a && el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
 }
+
+// Entregas que contam (sem os estornos e sem as que foram estornadas), a partir das linhas de v_vendas
+export function entregasValidas(vendas) {
+  const estornadas = new Set(vendas.filter((v) => v.estorno_de).map((v) => v.estorno_de));
+  return new Set(vendas.filter((v) => !v.eh_estorno && !estornadas.has(v.entrega_id)).map((v) => v.entrega_id));
+}

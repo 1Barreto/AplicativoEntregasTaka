@@ -1,6 +1,6 @@
 // Service worker: guarda os arquivos do app para abrir sem internet.
 // Ao publicar uma versão nova, aumente o número abaixo.
-const VERSAO = 'taka-v3';
+const VERSAO = 'taka-v4';
 const SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
 const ARQUIVOS = [
   './', './index.html', './manifest.json', './css/app.css',
