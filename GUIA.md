@@ -111,15 +111,17 @@ Sempre que alguém mudar algo no `main`, o site atualiza sozinho em 1 ou 2 minut
 
 Para cada pessoa:
 
-1. No app, vá em **Equipe › Convidar pessoa**. Coloque o e-mail, o nome e a função:
+1. No app, vá em **Mais › Equipe › Cadastrar pessoa**. Coloque o e-mail, o nome, a função e a senha (o app já sugere uma; toque em **Gerar** para outra ou digite a sua):
    - **Entregador**: pega carga, entrega, recebe, fecha o caixa.
    - **Atendente**: cria pedidos, cadastra clientes, recebe fiado.
    - **Estoquista**: entrada do fornecedor, saída de vazios, confere retirada e devolução.
    - **Admin**: tudo, mais ajustes, estornos, confirmação de caixa e relatórios.
-2. No Supabase, vá em **Authentication › Users › Add user › Send invitation** e coloque o **mesmo e-mail**.
-3. A pessoa recebe um e-mail, toca no link, cai no app e cria a senha dela. Pronto: já entra com a função que você escolheu.
+2. Toque em **Criar acesso**. A conta já fica pronta no Supabase, com a função escolhida.
+3. Toque em **Mandar no WhatsApp** para enviar o endereço do app, o e-mail e a senha para a pessoa. Ela já entra.
 
-O convite precisa ser feito no app **antes** do envio no Supabase. Se a conta for criada sem convite, ela aparece em **Equipe › Aguardando liberação** e só entra depois que você liberar.
+Se preferir que a pessoa crie a própria senha, marque **"Prefiro mandar um convite por e-mail"**: o Supabase manda o link para ela.
+
+Quem tem conta mas foi criado por fora do app aparece em **Equipe › Aguardando liberação** e só entra depois que você liberar.
 
 Para tirar alguém: **Equipe**, toque na pessoa e em **Desativar**. Ela perde o acesso na hora, e tudo o que ela registrou continua no histórico com o nome dela.
 

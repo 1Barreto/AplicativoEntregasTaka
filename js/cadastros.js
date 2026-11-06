@@ -212,15 +212,16 @@ export function telaEquipe(el, ctx) {
       h('div', { class: 'item-texto' }, h('strong', {}, p.nome || '(sem nome)'), h('span', {}, p.email)),
       etiqueta(PAPEIS[p.papel], p.ativo ? 'azul' : ''), icone('seta', 'seta'));
     limpar(conteudo,
-      h('button', { class: 'btn primario grande', onclick: () => formConvite(perfis, carregarConvites) }, icone('mais'), 'Convidar pessoa'),
+      h('button', { class: 'btn primario grande', onclick: () => formConvite(perfis, carregarConvites) }, icone('mais'), 'Cadastrar pessoa'),
       aguardando.length ? [h('h2', { class: 'titulo-secao alerta' }, 'Aguardando liberação'),
         h('p', { class: 'suave pequeno' }, 'Contas criadas sem convite. Libere só quem você conhece.'),
         h('div', { class: 'lista' }, aguardando.map(pessoa))] : null,
       h('h2', { class: 'titulo-secao' }, `Ativos (${ativos.length})`),
       h('div', { class: 'lista' }, ativos.map(pessoa)),
-      pendentes.length ? [h('h2', { class: 'titulo-secao' }, 'Convites aguardando cadastro'),
+      pendentes.length ? [h('h2', { class: 'titulo-secao' }, 'Cadastros sem acesso ainda'),
         h('div', { class: 'lista' }, pendentes.map((c) => h('div', { class: 'item' },
           h('div', { class: 'item-texto' }, h('strong', {}, c.nome || c.email), h('span', {}, c.email + ' · ' + PAPEIS[c.papel])),
+          h('button', { class: 'btn-texto', onclick: () => formConvite(perfis, carregarConvites, c) }, 'Criar acesso'),
           h('button', { class: 'btn-texto perigo', onclick: async () => {
             if (!(await confirmar(`Cancelar o convite de ${c.email}?`, { sim: 'Cancelar convite', perigo: true }))) return;
             const r = await D.direto(D.sb.from('convites').delete().eq('email', c.email));
@@ -234,26 +235,75 @@ export function telaEquipe(el, ctx) {
   ctx.ao('dados', (n) => { if (n === 'perfis') desenhar(); });
 }
 
-function formConvite(perfis, aoSalvar) {
-  const email = entrada({ type: 'email', inputmode: 'email', placeholder: 'pessoa@email.com' });
-  const nome = entrada({ placeholder: 'Nome', autocapitalize: 'words' });
-  const papel = selecao(Object.entries(PAPEIS), 'entregador');
-  const f = folha('Convidar pessoa', [
-    campo('E-mail *', email), campo('Nome', nome), campo('Função', papel),
-  ], { rodape: [h('button', { class: 'btn primario grande', onclick: async () => {
+// Senha fácil de ditar: 3 letras + 4 números (ex.: taka4821)
+function gerarSenha() {
+  const letras = 'abcdefghjkmnpqrstuvwxyz';
+  const n = crypto.getRandomValues(new Uint32Array(7));
+  return [0, 1, 2].map((i) => letras[n[i] % letras.length]).join('') + [3, 4, 5, 6].map((i) => n[i] % 10).join('');
+}
+
+// Cria a conta no Supabase pela função "convidar" (com senha) ou manda o convite por e-mail (sem senha)
+async function criarAcesso(email, senha) {
+  try {
+    const { data, error } = await D.sb.functions.invoke('convidar', {
+      body: { email, senha: senha || undefined, redirectTo: location.origin + location.pathname },
+    });
+    if (!error) return { ok: true, data };
+    let msg = error.message;
+    try { const j = await error.context.json(); msg = j.erro || msg; } catch { /* sem corpo */ }
+    return { erro: msg, semFuncao: /Failed to send|not found|404|fetch/i.test(String(error.message)) };
+  } catch (e) { return { erro: 'Sem conexão com o servidor.', semFuncao: true }; }
+}
+
+function formConvite(perfis, aoSalvar, inicial = {}) {
+  const email = entrada({ type: 'email', inputmode: 'email', placeholder: 'pessoa@email.com', value: inicial.email || '', autocomplete: 'off' });
+  const nome = entrada({ placeholder: 'Nome', autocapitalize: 'words', value: inicial.nome || '' });
+  const papel = selecao(Object.entries(PAPEIS), inicial.papel || 'entregador');
+  const senha = entrada({ type: 'text', autocomplete: 'new-password', placeholder: 'Mínimo 6 caracteres', value: gerarSenha() });
+  const novaSenha = h('button', { type: 'button', class: 'btn secundario', onclick: () => { senha.value = gerarSenha(); } }, 'Gerar');
+  const porEmail = chave('Prefiro mandar um convite por e-mail (a pessoa cria a senha)', false);
+  const blocoSenha = campo('Senha de acesso *', h('div', { class: 'linha-entrada' }, senha, novaSenha), 'A pessoa entra com este e-mail e esta senha. Ela pode trocar depois em "Esqueci minha senha".');
+  porEmail.input.addEventListener('change', () => { blocoSenha.hidden = porEmail.input.checked; });
+  const botao = h('button', { class: 'btn primario grande', onclick: async () => {
     const e = email.value.trim().toLowerCase();
+    const s = porEmail.input.checked ? '' : senha.value.trim();
     if (!/^\S+@\S+\.\S+$/.test(e)) return toast('E-mail inválido.', 'erro');
     if (perfis.some((p) => p.email === e)) return toast('Essa pessoa já tem conta. Edite-a na lista.', 'erro');
+    if (!porEmail.input.checked && s.length < 6) return toast('A senha precisa de pelo menos 6 caracteres.', 'erro');
+    botao.disabled = true; botao.textContent = 'Criando…';
     const r = await D.direto(D.sb.from('convites').insert({ email: e, nome: nome.value.trim(), papel: papel.value }));
-    if (r.erro && !/já existe/.test(r.erro)) return toast(r.rede ? 'Precisa de internet.' : r.erro, 'erro');
-    f.fechar(); aoSalvar();
-    instrucoesConvite(e);
-  } }, 'Salvar convite')] });
+    if (r.erro && !/já existe/.test(r.erro)) { botao.disabled = false; botao.textContent = 'Criar acesso'; return toast(r.rede ? 'Precisa de internet.' : r.erro, 'erro'); }
+    const a = await criarAcesso(e, s);
+    botao.disabled = false; botao.textContent = 'Criar acesso';
+    if (a.erro) {
+      if (a.semFuncao) { f.fechar(); aoSalvar(); return instrucoesConvite(e); }
+      return toast(a.erro, 'erro');
+    }
+    f.fechar(); aoSalvar(); D.baixar('perfis');
+    if (s) acessoCriado(e, s, nome.value.trim());
+    else toast('Convite enviado para ' + e + '.');
+  } }, 'Criar acesso');
+  const f = folha('Cadastrar pessoa', [
+    campo('E-mail *', email), campo('Nome', nome), campo('Função', papel), blocoSenha, porEmail.el,
+  ], { rodape: [botao] });
+}
+
+// Mostra os dados de acesso para mandar à pessoa
+function acessoCriado(email, senha, nome) {
+  const app = location.origin + location.pathname;
+  const msg = `Olá${nome ? ', ' + nome.split(' ')[0] : ''}! Seu acesso ao app de entregas:\n${app}\nE-mail: ${email}\nSenha: ${senha}`;
+  folha('Acesso criado', [
+    h('p', { class: 'aviso ok' }, icone('check'), h('span', {}, 'Pronto! A pessoa já pode entrar.')),
+    h('div', { class: 'copiar' }, h('code', {}, `E-mail: ${email}`, h('br'), `Senha: ${senha}`),
+      h('button', { class: 'btn secundario', onclick: () => navigator.clipboard.writeText(msg).then(() => toast('Copiado.')) }, 'Copiar')),
+    h('a', { class: 'btn verde grande', href: 'https://wa.me/?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener' }, icone('whats'), 'Mandar no WhatsApp'),
+    h('p', { class: 'suave pequeno' }, 'Anote ou mande agora: a senha não aparece de novo.'),
+  ]);
 }
 
 function instrucoesConvite(email) {
   folha('Falta um passo', [
-    h('p', {}, 'O convite foi salvo. Agora envie o e-mail de acesso pelo Supabase:'),
+    h('p', {}, 'O cadastro foi salvo, mas não deu para criar o acesso automático agora. Crie pelo Supabase:'),
     h('ol', { class: 'passos' },
       h('li', {}, 'Abra o painel do Supabase do seu projeto.'),
       h('li', {}, 'Vá em Authentication › Users.'),
