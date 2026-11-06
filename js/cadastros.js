@@ -8,30 +8,6 @@ import {
 const PAPEIS = { admin: 'Admin', entregador: 'Entregador', estoquista: 'Estoquista', atendente: 'Atendente' };
 
 // =====================================================================
-// PAINEL (admin) — nesta etapa, um resumo dos cadastros
-// =====================================================================
-export function telaPainel(el, ctx) {
-  const desenhar = () => {
-    const perfis = D.tabela('perfis');
-    const aguardando = perfis.filter((p) => !p.ativo);
-    limpar(el,
-      h('h1', {}, 'Painel'),
-      aguardando.length ? h('a', { class: 'aviso alerta', href: '#/equipe' }, icone('alerta'),
-        h('span', {}, `${aguardando.length} pessoa(s) aguardando liberação na Equipe`)) : null,
-      h('div', { class: 'grade-numeros' },
-        numero('Clientes', D.tabela('clientes').filter((c) => c.ativo).length, '#/clientes'),
-        numero('Produtos ativos', D.tabela('produtos').filter((p) => p.ativo).length, '#/produtos'),
-        numero('Equipe ativa', perfis.filter((p) => p.ativo).length, '#/equipe')),
-      h('div', { class: 'cartao em-breve' }, h('p', {}, 'Estoque, carga dos entregadores, vendas do dia, fiado e divergências aparecem aqui a partir da etapa 4.')));
-  };
-  desenhar();
-  ctx.ao('dados', desenhar);
-}
-function numero(rotulo, valor, href) {
-  return h('a', { class: 'numero', href }, h('strong', {}, String(valor)), h('span', {}, rotulo));
-}
-
-// =====================================================================
 // CLIENTES
 // =====================================================================
 export function telaClientes(el, ctx) {
@@ -70,6 +46,9 @@ export function telaClientes(el, ctx) {
   ctx.ao('dados', (n) => { if (n === 'clientes') desenhar(); });
 }
 
+// Outras telas acrescentam blocos ao detalhe do cliente (fiado, vasilhames...)
+export const extrasCliente = [];
+
 export function detalheCliente(id, ctx) {
   const c = D.tabela('clientes').find((x) => x.id === id);
   if (!c) return;
@@ -81,12 +60,14 @@ export function detalheCliente(id, ctx) {
     h('div', { class: 'botoes-lado' },
       c.telefone ? h('a', { class: 'btn verde', href: linkWhats(c.telefone), target: '_blank', rel: 'noopener' }, icone('whats'), 'WhatsApp') : null,
       c.telefone ? h('a', { class: 'btn secundario', href: 'tel:' + c.telefone.replace(/[^\d+]/g, '') }, icone('telefone'), 'Ligar') : null),
+    extrasCliente.map((fn) => fn(c, ctx)),
     ctx.eAdmin ? precosEspeciais(c) : null,
     h('p', { class: 'suave pequeno' }, `Cadastrado em ${dataHora(c.criado_em) || 'agora'} por ${nomePerfil(c.criado_por)}`
       + (c.atualizado_em ? ` · alterado em ${dataHora(c.atualizado_em)} por ${nomePerfil(c.atualizado_por)}` : '')));
   const f = folha(c.nome, corpo, { rodape: [
     h('button', { class: 'btn secundario', onclick: () => { f.fechar(); formCliente(ctx, c); } }, icone('editar'), 'Editar'),
   ] });
+  return f;
 }
 
 export function nomePerfil(id) {

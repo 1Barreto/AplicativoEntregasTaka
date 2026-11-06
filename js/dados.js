@@ -74,13 +74,27 @@ const CONSULTAS = {
   saldo_deposito: () => sb.from('v_saldo_deposito').select('*').order('ordem').order('nome'),
   carga: () => sb.from('v_carga_entregador').select('*'),          // o entregador só recebe a dele (RLS)
   turnos: () => sb.from('turnos').select('*')
-    .gte('iniciado_em', new Date(Date.now() - 30 * 864e5).toISOString()).order('iniciado_em', { ascending: false }),
+    .gte('iniciado_em', diasAtras(30)).order('iniciado_em', { ascending: false }),
+  resumos: () => sb.from('v_resumo_turno').select('*').gte('iniciado_em', diasAtras(30)),
+  entregas_recentes: () => sb.from('entregas').select('*').gte('ocorrido_em', diasAtras(2)).order('ocorrido_em', { ascending: false }),
+  vendas_hoje: () => sb.from('v_vendas').select('*').gte('ocorrido_em', inicioDoDia()),
+  fiado: () => sb.from('v_fiado').select('*'),
+  vasilhames: () => sb.from('v_vasilhames_cliente').select('*'),
+  vasilhames_total: () => sb.from('v_vasilhames_total').select('*'),
+  pedidos: () => sb.from('pedidos').select('*').gte('criado_em', diasAtras(30)).order('criado_em', { ascending: false }),
+  recorrentes: () => sb.from('v_recorrentes').select('*'),
 };
+function diasAtras(n) { return new Date(Date.now() - n * 864e5).toISOString(); }
+export function inicioDoDia(d = new Date()) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.toISOString(); }
 // Qual tabela do servidor atualiza qual cache (tempo real)
 const DEPENDENCIAS = {
   configuracoes: ['configuracoes'], perfis: ['perfis'], produtos: ['produtos', 'saldo_deposito'],
-  clientes: ['clientes'], precos_cliente: ['precos_cliente'],
-  movimentacoes: ['saldo_deposito', 'carga'], turnos: ['turnos'],
+  clientes: ['clientes', 'fiado', 'recorrentes', 'vasilhames'], precos_cliente: ['precos_cliente'],
+  movimentacoes: ['saldo_deposito', 'carga', 'vasilhames', 'vasilhames_total'],
+  turnos: ['turnos', 'resumos'],
+  entregas: ['entregas_recentes', 'vendas_hoje', 'fiado', 'resumos', 'recorrentes'],
+  pagamentos: ['fiado', 'resumos'],
+  pedidos: ['pedidos'],
 };
 export function registrarConsulta(nome, fn, tabelasOrigem = []) {
   CONSULTAS[nome] = fn;

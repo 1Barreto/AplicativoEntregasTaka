@@ -121,7 +121,7 @@ export function folha(titulo, conteudo, { rodape, aoFechar } = {}) {
       h('h2', {}, titulo),
       h('button', { class: 'btn-icone', 'aria-label': 'Fechar', onclick: fechar }, icone('fechar'))),
     h('div', { class: 'folha-corpo' }, conteudo),
-    rodape ? h('div', { class: 'folha-rodape' }, rodape) : null,
+    ...(rodape ? [h('div', { class: 'folha-rodape' }, rodape)] : []),
   );
   fundo.append(painel);
   document.body.append(fundo);
@@ -189,3 +189,47 @@ export function emBreve(titulo, etapa, texto) {
     h('p', {}, texto || 'Esta tela chega na etapa ' + etapa + '.'));
 }
 export function etiqueta(texto, tipo = '') { return h('span', { class: 'etiqueta ' + tipo }, texto); }
+
+// Botões grandes de escolha única (ex.: forma de pagamento)
+export function escolha(opcoes, valor, aoMudar, { classe = '' } = {}) {
+  let atual = valor;
+  const botoes = opcoes.map(([v, texto, desativado]) => {
+    const b = h('button', { type: 'button', class: 'opcao' + (v === atual ? ' marcada' : ''), disabled: !!desativado, 'aria-pressed': String(v === atual),
+      onclick: () => { atual = v; botoes.forEach((x) => { const m = x.dataset.v === v; x.classList.toggle('marcada', m); x.setAttribute('aria-pressed', String(m)); }); aoMudar && aoMudar(v); } }, texto);
+    b.dataset.v = v;
+    return b;
+  });
+  return { el: h('div', { class: 'escolha ' + classe }, botoes), get valor() { return atual; } };
+}
+
+// Monta e baixa um CSV que abre certo no Excel em português (; e vírgula decimal)
+export function baixarCsv(nome, colunas, linhas) {
+  const fmt = (v) => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'number') return String(v).replace('.', ',');
+    const s = String(v);
+    return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const txt = '﻿' + [colunas.map(([, t]) => t).join(';'), ...linhas.map((l) => colunas.map(([k]) => fmt(typeof k === 'function' ? k(l) : l[k])).join(';'))].join('\r\n');
+  const url = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' }));
+  const a = h('a', { href: url, download: nome });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Texto curto de tempo: "hoje", "há 3 dias", "em 2 dias"
+export function diasRelativo(d) {
+  const a = new Date(); a.setHours(0, 0, 0, 0);
+  const b = new Date(d); b.setHours(0, 0, 0, 0);
+  const n = Math.round((b - a) / 864e5);
+  if (n === 0) return 'hoje';
+  if (n === -1) return 'ontem';
+  if (n === 1) return 'amanhã';
+  return n < 0 ? `há ${-n} dias` : `em ${n} dias`;
+}
+
+// Usuário está digitando dentro de el? (não redesenhar para não perder o que digitou)
+export function digitando(el) {
+  const a = document.activeElement;
+  return !!a && el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+}

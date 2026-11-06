@@ -862,7 +862,7 @@ select e.id as entrega_id, e.ocorrido_em,
        e.cliente_id, c.nome as cliente, c.bairro,
        e.forma_pagamento, i.produto_id, p.nome as produto,
        i.quantidade, i.preco_unitario, (i.quantidade * i.preco_unitario)::numeric(12,2) as valor,
-       i.vazios_recebidos, e.estorno_de is not null as eh_estorno
+       i.vazios_recebidos, e.estorno_de is not null as eh_estorno, e.estorno_de
   from public.entregas e
   join public.entrega_itens i on i.entrega_id = e.id
   join public.produtos p on p.id = i.produto_id

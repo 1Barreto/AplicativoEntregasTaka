@@ -1,10 +1,13 @@
 // Estoque do depósito, carga do entregador (retirada/devolução) e conferência de turnos.
 import * as D from './dados.js';
-import {
+import { digitando,
   h, limpar, icone, toast, folha, confirmar, campo, entrada, selecao, contador,
   brl, lerValor, uuid, vazio, etiqueta, dataHora, num,
 } from './ui.js';
 import { nomePerfil } from './cadastros.js';
+
+// Outros módulos completam a tela Minha carga (fechamento de caixa)
+export const ganchosCarga = { fechamento: null, ultimoTurno: null };
 
 export const TIPOS = {
   entrada: 'Entrada do fornecedor', saida_vazios: 'Vazios ao fornecedor', retirada: 'Retirada',
@@ -242,6 +245,7 @@ export function telaCarga(el, ctx) {
           h('h2', {}, 'Nenhum turno aberto'),
           h('p', {}, 'Para começar, registre quantos galões cheios você está pegando no depósito.'),
           h('button', { class: 'btn primario grande', onclick: () => formRetirada(ctx, null) }, icone('caixa'), 'Iniciar turno')),
+        ganchosCarga.ultimoTurno ? ganchosCarga.ultimoTurno(ctx) : null,
         carga.length ? [h('h2', { class: 'titulo-secao alerta' }, 'Ficou com você do turno anterior'), cartoes()] : null);
     }
     if (!turno.encerrado_em) {
@@ -270,11 +274,11 @@ export function telaCarga(el, ctx) {
           ? h('div', { class: 'aviso alerta col' }, h('strong', {}, 'A conferência não bateu:'), difs.map((d) => h('span', {}, d)),
               h('small', {}, 'O admin vai ver essa diferença. Se esqueceu algo, registre de novo abaixo.'))
           : h('div', { class: 'aviso ok' }, icone('check'), h('span', {}, 'Conferência OK: tudo bateu.'))),
-      h('button', { class: 'btn secundario grande', onclick: () => formDevolucao(ctx, turno) }, 'Devolver mais itens'),
-      h('div', { class: 'cartao em-breve' }, h('p', {}, 'O envio do fechamento de caixa chega na etapa 4.')));
+      ganchosCarga.fechamento ? ganchosCarga.fechamento(turno, ctx) : null,
+      h('button', { class: 'btn secundario grande', onclick: () => formDevolucao(ctx, turno) }, 'Devolver mais itens'));
   };
   desenhar();
-  ctx.ao('dados', (n) => { if (['turnos', 'carga', 'produtos', 'saldo_deposito'].includes(n)) desenhar(); });
+  ctx.ao('dados', (n) => { if (['turnos', 'carga', 'produtos', 'saldo_deposito', 'resumos'].includes(n) && !digitando(el)) desenhar(); });
 }
 
 function formRetirada(ctx, turno) {
@@ -350,7 +354,7 @@ function formDevolucao(ctx, turno) {
 // =====================================================================
 export function telaConferir(el, ctx) {
   const lista = h('div');
-  el.append(ctx.perfil.papel === 'estoquista' ? h('h1', {}, 'Conferir turnos') : null,
+  el.append(...(ctx.perfil.papel === 'estoquista' ? [h('h1', {}, 'Conferir turnos')] : []),
     h('p', { class: 'suave' }, 'Turnos abertos e dos últimos 2 dias. Diferença diferente de zero aparece em vermelho.'), lista);
   const carregar = async () => {
     const limite = Date.now() - 2 * 864e5;

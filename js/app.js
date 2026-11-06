@@ -1,8 +1,11 @@
 // Início do app: login, perfil, navegação por abas e telas.
 import * as D from './dados.js';
-import { h, limpar, icone, toast, folha, campo, entrada, emBreve, etiqueta } from './ui.js';
+import { h, limpar, icone, toast, folha, campo, entrada, etiqueta } from './ui.js';
 import * as C from './cadastros.js';
 import * as E from './estoque.js';
+import * as Ent from './entregas.js';
+import * as K from './caixa.js';
+import * as P from './pedidos.js';
 
 const raiz = document.getElementById('app');
 
@@ -19,26 +22,40 @@ export const PAPEIS = { admin: 'Admin', entregador: 'Entregador', estoquista: 'E
 
 // Telas: cada uma recebe (elemento, contexto) e pode devolver uma função de limpeza
 const TELAS = {
-  entregar: (el) => el.append(emBreve('Registrar entrega', 3)),
+  entregar: Ent.telaEntregar,
   carga: E.telaCarga,
-  fiado: (el) => el.append(emBreve('Fiado', 3)),
-  painel: C.telaPainel,
+  fiado: Ent.telaFiado,
+  vasilhames: Ent.telaVasilhames,
+  painel: K.telaPainel,
+  fechamentos: K.telaFechamentos,
   estoque: E.telaEstoque,
   conferir: E.telaConferir,
   historico: E.telaHistorico,
-  relatorios: (el) => el.append(emBreve('Relatórios', 5)),
-  pedidos: (el) => el.append(emBreve('Pedidos', 5)),
+  relatorios: P.telaRelatorios,
+  pedidos: P.telaPedidos,
+  provaveis: P.telaProvaveis,
   clientes: C.telaClientes,
-  equipe: C.telaEquipe,
+  equipe: (el, ctx) => { const r = C.telaEquipe(el, ctx); el.insertBefore(K.avisoFechamentos(), el.children[1] || null); return r; },
   produtos: C.telaProdutos,
   config: C.telaConfig,
   sinc: C.telaSinc,
   instalar: C.telaInstalar,
   mais: telaMais,
 };
-const TITULOS = { produtos: 'Produtos', config: 'Configurações', sinc: 'Sincronização', instalar: 'Instalar no celular', clientes: 'Clientes', historico: 'Histórico do estoque', conferir: 'Conferir turnos' };
+const TITULOS = {
+  produtos: 'Produtos', config: 'Configurações', sinc: 'Sincronização', instalar: 'Instalar no celular', clientes: 'Clientes',
+  historico: 'Histórico do estoque', conferir: 'Conferir turnos', vasilhames: 'Vasilhames', fechamentos: 'Fechamentos de caixa',
+  provaveis: 'Prováveis pedidos', pedidos: 'Pedidos',
+};
 // De onde a tela foi aberta (para o botão voltar)
 const VOLTAR = { historico: ['estoque', 'Estoque'], conferir: ['estoque', 'Estoque'] };
+// Telas extras (fora da barra) que cada perfil pode abrir
+const EXTRAS = {
+  admin: ['clientes', 'produtos', 'config', 'historico', 'conferir', 'fiado', 'vasilhames', 'fechamentos', 'pedidos', 'provaveis'],
+  entregador: ['vasilhames', 'fechamentos', 'provaveis'],
+  estoquista: ['historico', 'vasilhames'],
+  atendente: ['vasilhames', 'provaveis'],
+};
 
 // ---------------------------------------------------------------------
 // Início
@@ -69,6 +86,7 @@ async function entrarNoApp(user) {
   if (!perfil) return telaSemPerfil();
   if (!perfil.ativo) return telaAguardando(perfil);
   await D.iniciarSessao(perfil);
+  P.iniciarAvisos(perfil);
   montarLayout();
   if (!location.hash.startsWith('#/')) location.hash = '#/' + ABAS[perfil.papel][0][0];
   rotear();
@@ -193,8 +211,7 @@ function rotear() {
   const perfil = D.estado.perfil;
   const [rota, ...args] = location.hash.replace(/^#\//, '').split('/');
   const abas = ABAS[perfil.papel].map((a) => a[0]);
-  const permitidas = new Set([...abas, 'mais', 'sinc', 'instalar', 'clientes', ...(perfil.papel === 'admin' ? ['produtos', 'config', 'historico', 'conferir'] : []),
-    ...(perfil.papel === 'estoquista' ? ['historico'] : [])]);
+  const permitidas = new Set([...abas, 'mais', 'sinc', 'instalar', 'clientes', ...EXTRAS[perfil.papel]]);
   const id = permitidas.has(rota) && TELAS[rota] ? rota : abas[0];
 
   limpeza.forEach((f) => f && f()); limpeza = [];
@@ -229,9 +246,17 @@ function telaMais(el, ctx) {
     h('div', { class: 'cartao perfil' },
       h('strong', {}, p.nome || p.email), h('span', { class: 'suave' }, p.email), etiqueta(PAPEIS[p.papel], 'azul')),
     h('div', { class: 'menu' },
-      ctx.eAdmin ? item('#/clientes', 'pessoas', 'Clientes') : null,
-      ctx.eAdmin ? item('#/produtos', 'gota', 'Produtos e preços') : null,
-      ctx.eAdmin ? item('#/config', 'config', 'Configurações') : null,
+      ctx.eAdmin ? [
+        item('#/pedidos', 'lista', 'Pedidos'),
+        item('#/fechamentos', 'moeda', 'Fechamentos de caixa'),
+        item('#/fiado', 'moeda', 'Fiado'),
+        item('#/clientes', 'pessoas', 'Clientes'),
+        item('#/produtos', 'gota', 'Produtos e preços'),
+        item('#/config', 'config', 'Configurações'),
+      ] : null,
+      p.papel === 'entregador' ? item('#/fechamentos', 'moeda', 'Meus fechamentos') : null,
+      EXTRAS[p.papel].includes('provaveis') ? item('#/provaveis', 'grafico', 'Prováveis pedidos') : null,
+      item('#/vasilhames', 'gota', 'Vasilhames'),
       item('#/sinc', 'nuvem', 'Sincronização', pend ? etiqueta(String(pend), 'amarelo') : null),
       item('#/instalar', 'celular', 'Instalar no celular'),
       h('button', { class: 'item-menu', onclick: async () => {
