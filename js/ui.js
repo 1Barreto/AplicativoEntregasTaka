@@ -158,16 +158,26 @@ export function chave(rotulo, marcado, props = {}) {
   return { el: h('label', { class: 'chave' }, inp, h('span', { class: 'trilho' }), h('span', {}, rotulo)), input: inp };
 }
 
-// Contador grande com − e +
-export function contador(valor = 0, { min = 0, max = 999, aoMudar, rotulo } = {}) {
+// Contador grande com − e +; o número também pode ser digitado
+export function contador(valor = 0, { min = 0, max = 9999, aoMudar, rotulo } = {}) {
   let v = valor;
-  const mostrador = h('output', { class: 'contador-valor' }, String(v));
-  const atualizar = (n) => { v = Math.max(min, Math.min(max, n)); mostrador.textContent = String(v); aoMudar && aoMudar(v); };
+  const mostrador = h('input', {
+    class: 'contador-valor', type: 'text', inputmode: 'numeric', pattern: '[0-9]*',
+    value: String(v), 'aria-label': rotulo || 'Quantidade',
+  });
+  const atualizar = (n, digitando) => {
+    v = Math.max(min, Math.min(max, Number.isFinite(n) ? n : min));
+    if (!digitando) mostrador.value = String(v);
+    aoMudar && aoMudar(v);
+  };
+  mostrador.addEventListener('focus', () => mostrador.select());
+  mostrador.addEventListener('input', () => atualizar(parseInt(mostrador.value.replace(/\D/g, ''), 10) || 0, true));
+  mostrador.addEventListener('blur', () => { mostrador.value = String(v); });
   const el = h('div', { class: 'contador', role: 'group', 'aria-label': rotulo || 'Quantidade' },
     h('button', { class: 'contador-btn', type: 'button', 'aria-label': 'Diminuir', onclick: () => atualizar(v - 1) }, icone('menos')),
     mostrador,
     h('button', { class: 'contador-btn', type: 'button', 'aria-label': 'Aumentar', onclick: () => atualizar(v + 1) }, icone('mais')));
-  return { el, get valor() { return v; }, definir: atualizar };
+  return { el, get valor() { return v; }, definir: (n) => atualizar(n) };
 }
 
 export function vazio(msg, acao) {

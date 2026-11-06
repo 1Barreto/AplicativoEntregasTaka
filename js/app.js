@@ -2,6 +2,7 @@
 import * as D from './dados.js';
 import { h, limpar, icone, toast, folha, campo, entrada, emBreve, etiqueta } from './ui.js';
 import * as C from './cadastros.js';
+import * as E from './estoque.js';
 
 const raiz = document.getElementById('app');
 
@@ -19,11 +20,12 @@ export const PAPEIS = { admin: 'Admin', entregador: 'Entregador', estoquista: 'E
 // Telas: cada uma recebe (elemento, contexto) e pode devolver uma função de limpeza
 const TELAS = {
   entregar: (el) => el.append(emBreve('Registrar entrega', 3)),
-  carga: (el) => el.append(emBreve('Minha carga', 2, 'Retirada no início do turno e devolução no fim chegam na etapa 2.')),
+  carga: E.telaCarga,
   fiado: (el) => el.append(emBreve('Fiado', 3)),
   painel: C.telaPainel,
-  estoque: (el) => el.append(emBreve('Estoque', 2)),
-  conferir: (el) => el.append(emBreve('Conferir retiradas e devoluções', 2)),
+  estoque: E.telaEstoque,
+  conferir: E.telaConferir,
+  historico: E.telaHistorico,
   relatorios: (el) => el.append(emBreve('Relatórios', 5)),
   pedidos: (el) => el.append(emBreve('Pedidos', 5)),
   clientes: C.telaClientes,
@@ -34,7 +36,9 @@ const TELAS = {
   instalar: C.telaInstalar,
   mais: telaMais,
 };
-const TITULOS = { produtos: 'Produtos', config: 'Configurações', sinc: 'Sincronização', instalar: 'Instalar no celular', clientes: 'Clientes' };
+const TITULOS = { produtos: 'Produtos', config: 'Configurações', sinc: 'Sincronização', instalar: 'Instalar no celular', clientes: 'Clientes', historico: 'Histórico do estoque', conferir: 'Conferir turnos' };
+// De onde a tela foi aberta (para o botão voltar)
+const VOLTAR = { historico: ['estoque', 'Estoque'], conferir: ['estoque', 'Estoque'] };
 
 // ---------------------------------------------------------------------
 // Início
@@ -189,15 +193,17 @@ function rotear() {
   const perfil = D.estado.perfil;
   const [rota, ...args] = location.hash.replace(/^#\//, '').split('/');
   const abas = ABAS[perfil.papel].map((a) => a[0]);
-  const permitidas = new Set([...abas, 'mais', 'sinc', 'instalar', 'clientes', ...(perfil.papel === 'admin' ? ['produtos', 'config'] : [])]);
+  const permitidas = new Set([...abas, 'mais', 'sinc', 'instalar', 'clientes', ...(perfil.papel === 'admin' ? ['produtos', 'config', 'historico', 'conferir'] : []),
+    ...(perfil.papel === 'estoquista' ? ['historico'] : [])]);
   const id = permitidas.has(rota) && TELAS[rota] ? rota : abas[0];
 
   limpeza.forEach((f) => f && f()); limpeza = [];
-  document.querySelectorAll('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.aba === id || (!abas.includes(id) && a.dataset.aba === 'mais')));
+  document.querySelectorAll('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.aba === id || (!abas.includes(id) && a.dataset.aba === (VOLTAR[id] ? VOLTAR[id][0] : 'mais'))));
   limpar(elTela);
   if (TITULOS[id] && !abas.includes(id)) {
+    const [voltarPara, voltarNome] = VOLTAR[id] || ['mais', 'Mais'];
     elTela.append(h('div', { class: 'voltar' },
-      h('a', { href: '#/mais', class: 'btn-texto' }, '‹ Mais'),
+      h('a', { href: '#/' + voltarPara, class: 'btn-texto' }, '‹ ' + voltarNome),
       h('h1', {}, TITULOS[id])));
   }
   const corpo = h('div', { class: 'tela-corpo' });

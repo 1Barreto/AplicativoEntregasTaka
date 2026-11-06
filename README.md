@@ -18,13 +18,14 @@ App instalável (PWA) para distribuidora de água mineral: estoque, retiradas, e
 | `js/ui.js` | Componentes de tela e formatação |
 | `js/app.js` | Login, perfis, navegação |
 | `js/cadastros.js` | Clientes, produtos, equipe, configurações |
+| `js/estoque.js` | Estoque do depósito, histórico, carga do entregador, conferência |
 | `sw.js`, `manifest.json`, `icons/` | Instalação e funcionamento offline |
 | `supabase/schema.sql` | Banco completo: tabelas, regras de acesso, funções |
 
 ## Andamento
 
 - [x] Etapa 1: login, perfis e cadastros
-- [ ] Etapa 2: estoque, retirada e devolução
+- [x] Etapa 2: estoque, retirada e devolução
 - [ ] Etapa 3: entrega, fiado e vasilhames
 - [ ] Etapa 4: fechamento de caixa e painel
 - [ ] Etapa 5: pedidos, clientes recorrentes e relatórios

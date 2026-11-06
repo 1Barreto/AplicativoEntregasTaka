@@ -71,11 +71,16 @@ const CONSULTAS = {
   produtos: () => sb.from('produtos').select('*').order('ordem').order('nome'),
   clientes: () => sb.from('clientes').select('*').order('nome'),
   precos_cliente: () => sb.from('precos_cliente').select('*'),
+  saldo_deposito: () => sb.from('v_saldo_deposito').select('*').order('ordem').order('nome'),
+  carga: () => sb.from('v_carga_entregador').select('*'),          // o entregador só recebe a dele (RLS)
+  turnos: () => sb.from('turnos').select('*')
+    .gte('iniciado_em', new Date(Date.now() - 30 * 864e5).toISOString()).order('iniciado_em', { ascending: false }),
 };
 // Qual tabela do servidor atualiza qual cache (tempo real)
 const DEPENDENCIAS = {
-  configuracoes: ['configuracoes'], perfis: ['perfis'], produtos: ['produtos'],
+  configuracoes: ['configuracoes'], perfis: ['perfis'], produtos: ['produtos', 'saldo_deposito'],
   clientes: ['clientes'], precos_cliente: ['precos_cliente'],
+  movimentacoes: ['saldo_deposito', 'carga'], turnos: ['turnos'],
 };
 export function registrarConsulta(nome, fn, tabelasOrigem = []) {
   CONSULTAS[nome] = fn;
@@ -113,8 +118,8 @@ export const baixarVarias = (nomes) => Promise.all(nomes.map(baixar));
 function aplicarPendentes(nome, linhas) {
   let res = linhas.slice();
   for (const op of estado.fila) {
-    if (op.alvo !== nome || !op.local) continue;
-    res = op.local(res);
+    if (op.erro) continue;
+    for (const ef of op.locais || []) if (ef.alvo === nome) res = ef.fn(res);
   }
   return res;
 }
@@ -122,36 +127,58 @@ function aplicarPendentes(nome, linhas) {
 // ---------------------------------------------------------------------
 // Fila offline
 // ---------------------------------------------------------------------
-// Mudanças locais conhecidas, aplicadas na hora e reaplicadas após recarregar
+// Efeitos locais: o que a operação muda na tela antes de o servidor responder.
+// { tipo: 'insert'|'update'|'delete'|'somar', alvo, dados, filtro, chaves, linhaLocal }
 const EFEITOS = {
-  insert: (op) => (linhas) => linhas.some((l) => mesmaLinha(l, op.dados, op.chaves)) ? linhas : [...linhas, { ...op.dados, ...(op.linhaLocal || {}) }],
-  update: (op) => (linhas) => linhas.map((l) => casa(l, op.filtro) ? { ...l, ...op.dados } : l),
-  delete: (op) => (linhas) => linhas.filter((l) => !casa(l, op.filtro)),
+  insert: (ef) => (linhas) => linhas.some((l) => mesmaLinha(l, ef.dados, ef.chaves)) ? linhas : [...linhas, { ...ef.dados, ...(ef.linhaLocal || {}) }],
+  update: (ef) => (linhas) => linhas.map((l) => casa(l, ef.filtro) ? { ...l, ...ef.dados } : l),
+  delete: (ef) => (linhas) => linhas.filter((l) => !casa(l, ef.filtro)),
+  // soma números numa linha (ex.: carga do entregador); cria a linha se não existir
+  somar: (ef) => (linhas) => {
+    const filtro = Object.fromEntries(ef.chaves.map((k) => [k, ef.dados[k]]));
+    let achou = false;
+    const res = linhas.map((l) => {
+      if (!casa(l, filtro)) return l;
+      achou = true;
+      const n = { ...l };
+      for (const [k, v] of Object.entries(ef.dados)) if (!ef.chaves.includes(k)) n[k] = Number(n[k] || 0) + Number(v);
+      return n;
+    });
+    return achou ? res : [...res, { ...(ef.linhaLocal || {}), ...ef.dados }];
+  },
 };
 const casa = (linha, filtro) => Object.entries(filtro || {}).every(([k, v]) => String(linha[k]) === String(v));
 const mesmaLinha = (a, b, chaves = ['id']) => chaves.every((k) => a[k] !== undefined && String(a[k]) === String(b[k]));
 
 function prepararOp(op) {
-  if (EFEITOS[op.tipo] && op.alvo) op.local = EFEITOS[op.tipo](op);
+  const efeitos = [...(op.efeitos || [])];
+  if (op.tipo !== 'rpc' && op.alvo) efeitos.unshift({ tipo: op.tipo, alvo: op.alvo, dados: op.dados, filtro: op.filtro, chaves: op.chaves, linhaLocal: op.linhaLocal });
+  op.locais = efeitos.filter((ef) => EFEITOS[ef.tipo]).map((ef) => ({ alvo: ef.alvo, fn: EFEITOS[ef.tipo](ef) }));
   return op;
 }
 
 async function salvarFila() {
-  await gravarLocal(chave('fila'), estado.fila.map(({ local, ...resto }) => resto));
+  await gravarLocal(chave('fila'), estado.fila.map(({ locais, ...resto }) => resto));
   emitir('fila', estado.fila);
 }
 
 // op: { tipo: 'rpc'|'insert'|'update'|'delete', alvo, dados, filtro, chaves, descricao,
-//       linhaLocal (campos extras só para mostrar na tela até o servidor responder) }
+//       linhaLocal (campos extras só para mostrar na tela até o servidor responder),
+//       efeitos (outras mudanças locais), recarregar (caches a baixar depois de enviar) }
+// Em RPC, se dados.p_op existir vazio, recebe o id da operação (é a chave anti-duplicação).
 export async function enfileirar(op) {
   op.id = op.id || uuid();
   op.quando = new Date().toISOString();
+  if (op.tipo === 'rpc' && op.dados && 'p_op' in op.dados && !op.dados.p_op) op.dados.p_op = op.id;
   prepararOp(op);
   estado.fila.push(op);
-  if (op.local && estado.tabelas[op.alvo]) {
-    estado.tabelas[op.alvo] = op.local(estado.tabelas[op.alvo]);
-    emitir('dados', op.alvo);
+  const mudadas = new Set();
+  for (const ef of op.locais) {
+    if (!estado.tabelas[ef.alvo]) estado.tabelas[ef.alvo] = [];
+    estado.tabelas[ef.alvo] = ef.fn(estado.tabelas[ef.alvo]);
+    mudadas.add(ef.alvo);
   }
+  mudadas.forEach((n) => emitir('dados', n));
   await salvarFila();
   sincronizar();
   return op.id;
@@ -211,17 +238,19 @@ async function rodarFila() {
     marcarOnline(true);
     if (r.ok) {
       estado.fila = estado.fila.filter((x) => x.id !== op.id);
+      (op.locais || []).forEach((ef) => tocadas.add(ef.alvo));
       if (op.alvo) tocadas.add(op.alvo);
       (op.recarregar || []).forEach((t) => tocadas.add(t));
     } else {
       op.erro = r.erro;
+      (op.locais || []).forEach((ef) => tocadas.add(ef.alvo));
     }
     await salvarFila();
   }
   if (tocadas.size) {
     estado.ultimaSinc = new Date();
     const nomes = new Set();
-    for (const t of tocadas) (DEPENDENCIAS[t] || [t]).forEach((n) => CONSULTAS[n] && nomes.add(n));
+    for (const t of tocadas) [t, ...(DEPENDENCIAS[t] || [])].forEach((n) => CONSULTAS[n] && nomes.add(n));
     await baixarVarias([...nomes]);
   }
 }
