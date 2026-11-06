@@ -2,7 +2,7 @@
 import * as D from './dados.js';
 import {
   h, limpar, icone, toast, folha, confirmar, campo, entrada, selecao, contador, escolha,
-  entregasValidas, brl, normalizar, uuid, linkWhats, vazio, etiqueta, num, dataHora, baixarCsv, diasRelativo,
+  entregasValidas, brl, normalizar, uuid, linkWhats, linkMapa, vazio, etiqueta, num, dataHora, baixarCsv, diasRelativo,
 } from './ui.js';
 import { nomePerfil, detalheCliente } from './cadastros.js';
 import { produtosAtivos, TIPOS } from './estoque.js';
@@ -47,8 +47,9 @@ export function telaPedidos(el, ctx) {
   const lista = h('div', { class: 'lista' });
   const esc = escolha([['abertos', 'Abertos'], ['hoje', 'Entregues hoje'], ['cancelado', 'Cancelados']], filtro, (v) => { filtro = v; desenhar(); }, { classe: 'tres' });
   el.append(
-    ...(ctx.perfil.papel === 'atendente' ? [h('h1', {}, 'Pedidos')] : []),
+    h('h1', {}, 'Pedidos'),
     h('button', { class: 'btn primario grande', onclick: () => formPedido(ctx) }, icone('mais'), 'Novo pedido'),
+    ctx.eAdmin && !D.config().loja_ativa ? h('a', { class: 'aviso info', href: '#/config' }, icone('loja'), h('span', {}, 'Ligue a loja online para o cliente pedir sozinho por um link.')) : null,
     esc.el, lista);
   const desenhar = () => {
     const hoje = D.inicioDoDia();
@@ -64,7 +65,7 @@ export function telaPedidos(el, ctx) {
           h('span', {}, [c.bairro, descricaoPedido(p)].filter(Boolean).join(' · ')),
           p.observacao ? h('small', {}, p.observacao) : null,
           h('small', { class: 'quem' }, `${p.entregador_id ? nomePerfil(p.entregador_id) : 'Livre para quem pegar'} · ${minutos(p.criado_em)}`)),
-        etiqueta(txt, cor));
+        h('div', { class: 'etiquetas-col' }, p.origem === 'loja' ? etiqueta('Loja online', 'loja') : null, etiqueta(txt, cor)));
     }) : vazio(filtro === 'abertos' ? 'Nenhum pedido aberto.' : 'Nada aqui.'));
   };
   desenhar();
@@ -102,10 +103,10 @@ function acoesPedido(p, ctx) {
   const quem = selecao([['', 'Livre (quem pegar primeiro)'], ...entregadores().map((x) => [x.id, x.nome || x.email])], p.entregador_id || '');
   const f = folha(c.nome, [
     h('p', {}, descricaoPedido(p)), p.observacao ? h('p', { class: 'obs' }, p.observacao) : null,
-    h('p', { class: 'suave pequeno' }, `Criado por ${nomePerfil(p.criado_por)} em ${dataHora(p.criado_em)}` + (p.atualizado_em ? ` · alterado por ${nomePerfil(p.atualizado_por)} em ${dataHora(p.atualizado_em)}` : '')),
+    h('p', { class: 'suave pequeno' }, `${p.origem === 'loja' ? 'Feito pelo cliente na loja online' : 'Criado por ' + nomePerfil(p.criado_por)} em ${dataHora(p.criado_em)}` + (p.atualizado_em ? ` · alterado por ${nomePerfil(p.atualizado_por)} em ${dataHora(p.atualizado_em)}` : '')),
     aberto ? campo('Entregador', quem) : null,
     h('div', { class: 'botoes-lado' },
-      c.telefone ? h('a', { class: 'btn verde', href: linkWhats(c.telefone), target: '_blank', rel: 'noopener' }, icone('whats'), 'WhatsApp') : null,
+      c.telefone ? h('a', { class: 'btn verde', href: linkWhats(c.telefone, p.origem === 'loja' ? `Olá, ${(c.nome || '').split(' ')[0]}! Recebemos seu pedido de ${descricaoPedido(p)}. Já já chega aí!` : ''), target: '_blank', rel: 'noopener' }, icone('whats'), 'WhatsApp') : null,
       h('button', { class: 'btn secundario', onclick: () => { f.fechar(); detalheCliente(p.cliente_id, ctx); } }, 'Cliente')),
   ], { rodape: aberto ? [
     h('button', { class: 'btn perigo', onclick: async () => {
@@ -126,14 +127,29 @@ function acoesPedido(p, ctx) {
 // ---------------------------------------------------------------------
 ganchos.topoEntregar = (ctx) => {
   const eu = ctx.perfil.id;
-  const meus = abertos().filter((p) => p.entregador_id === eu);
+  // fila do dia: agrupada por bairro e rua, para seguir na ordem do caminho
+  const ordem = (a, b) => {
+    const ca = cliente(a.cliente_id), cb = cliente(b.cliente_id);
+    return normalizar(`${ca.bairro}|${ca.endereco}`).localeCompare(normalizar(`${cb.bairro}|${cb.endereco}`), 'pt-BR');
+  };
+  const meus = abertos().filter((p) => p.entregador_id === eu).sort(ordem);
   const livres = abertos().filter((p) => !p.entregador_id && p.status === 'pendente');
   if (!meus.length && !livres.length) return null;
-  const item = (p, meu) => {
+  const cidade = D.config().cidade || '';
+  const atalhos = (c) => {
+    const mapa = linkMapa(c, cidade);
+    return h('div', { class: 'atalhos' },
+      mapa ? h('a', { class: 'atalho', href: mapa, target: '_blank', rel: 'noopener', 'aria-label': 'Abrir no mapa' }, icone('mapa'), h('span', {}, 'Mapa')) : null,
+      c.telefone ? h('a', { class: 'atalho', href: 'tel:' + String(c.telefone).replace(/[^\d+]/g, ''), 'aria-label': 'Ligar' }, icone('telefone'), h('span', {}, 'Ligar')) : null,
+      c.telefone ? h('a', { class: 'atalho', href: linkWhats(c.telefone), target: '_blank', rel: 'noopener', 'aria-label': 'WhatsApp' }, icone('whats'), h('span', {}, 'Zap')) : null);
+  };
+  const item = (p, meu, i) => {
     const c = cliente(p.cliente_id);
     return h('div', { class: 'item pedido' },
+      meu ? h('span', { class: 'parada' }, String(i + 1)) : null,
       h('div', { class: 'item-texto' }, h('strong', {}, c.nome),
-        h('span', {}, [c.bairro, descricaoPedido(p)].filter(Boolean).join(' · ')),
+        h('span', {}, [c.endereco, c.bairro].filter(Boolean).join(' · ') || 'Sem endereço'),
+        h('span', { class: 'pedido-desc' }, descricaoPedido(p), p.origem === 'loja' ? [' ', etiqueta('Loja', 'loja')] : null),
         p.observacao ? h('small', {}, p.observacao) : null),
       meu ? h('div', { class: 'botoes-col' },
         h('button', { class: 'btn primario pequeno-btn', onclick: () => prepararPedido(p) }, 'Entregar'),
@@ -145,19 +161,36 @@ ganchos.topoEntregar = (ctx) => {
           await D.enfileirar({ tipo: 'rpc', alvo: 'pegar_pedido', dados: { p_pedido_id: p.id },
             efeitos: [{ tipo: 'update', alvo: 'pedidos', dados: { entregador_id: eu, status: 'em_rota' }, filtro: { id: p.id } }], descricao: 'Pegar pedido: ' + c.nome });
           toast('Pedido é seu.');
-        } }, 'Pegar'));
+        } }, 'Pegar'),
+      meu ? atalhos(c) : null);
   };
   return h('div', { class: 'cartao pedidos-topo' },
-    meus.length ? [h('span', { class: 'passo' }, `Seus pedidos (${meus.length})`), h('div', { class: 'lista' }, meus.slice(0, 6).map((p) => item(p, true)))] : null,
+    meus.length ? [h('span', { class: 'passo' }, `Sua fila de entregas (${meus.length})`), h('div', { class: 'lista' }, meus.slice(0, 15).map((p, i) => item(p, true, i)))] : null,
     livres.length ? [h('span', { class: 'passo' }, `Livres para pegar (${livres.length})`), h('div', { class: 'lista' }, livres.slice(0, 6).map((p) => item(p, false)))] : null);
 };
 
 // Aviso quando chega pedido novo para o entregador (tempo real)
 export function iniciarAvisos(perfil) {
-  if (perfil.papel !== 'entregador') return;
+  const gestor = perfil.papel === 'admin' || perfil.papel === 'atendente';
+  if (perfil.papel !== 'entregador' && !gestor) return;
   let conhecidos = null;
   D.ao('dados', (n) => {
     if (n !== 'pedidos') return;
+    if (gestor) {
+      // admin e atendente: avisa pedido que chegou pela loja online
+      const daLoja = abertos().filter((p) => p.origem === 'loja');
+      const ids = new Set(daLoja.map((p) => p.id));
+      if (conhecidos) {
+        const novos = daLoja.filter((p) => !conhecidos.has(p.id));
+        if (novos.length) {
+          toast(novos.length === 1 ? `Pedido na loja: ${cliente(novos[0].cliente_id).nome} (${descricaoPedido(novos[0])})` : `${novos.length} pedidos novos na loja`);
+          if (navigator.vibrate) navigator.vibrate([150, 80, 150]);
+          bip();
+        }
+      }
+      conhecidos = ids;
+      return;
+    }
     const relevantes = abertos().filter((p) => p.entregador_id === perfil.id || !p.entregador_id);
     const ids = new Set(relevantes.map((p) => p.id));
     if (conhecidos) {
@@ -169,6 +202,17 @@ export function iniciarAvisos(perfil) {
     }
     conhecidos = ids;
   });
+}
+
+// Som curto de aviso (só toca se o navegador permitir)
+function bip() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = 880; g.gain.value = 0.08;
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.18);
+    setTimeout(() => ac.close(), 400);
+  } catch { /* sem som */ }
 }
 
 // =====================================================================

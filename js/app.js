@@ -6,6 +6,7 @@ import * as E from './estoque.js';
 import * as Ent from './entregas.js';
 import * as K from './caixa.js';
 import * as P from './pedidos.js';
+import * as F from './financeiro.js';
 
 const raiz = document.getElementById('app');
 
@@ -14,7 +15,7 @@ const raiz = document.getElementById('app');
 // ---------------------------------------------------------------------
 const ABAS = {
   entregador: [['entregar', 'Entregar', 'caminhao'], ['carga', 'Minha carga', 'caixa'], ['fiado', 'Fiado', 'moeda'], ['clientes', 'Clientes', 'pessoas'], ['mais', 'Mais', 'menu']],
-  admin: [['painel', 'Painel', 'grafico'], ['estoque', 'Estoque', 'caixa'], ['equipe', 'Equipe', 'pessoas'], ['relatorios', 'Relatórios', 'doc'], ['mais', 'Mais', 'menu']],
+  admin: [['painel', 'Painel', 'grafico'], ['pedidos', 'Pedidos', 'lista'], ['estoque', 'Estoque', 'caixa'], ['financeiro', 'Financeiro', 'carteira'], ['mais', 'Mais', 'menu']],
   estoquista: [['estoque', 'Estoque', 'caixa'], ['conferir', 'Conferir', 'check'], ['clientes', 'Clientes', 'pessoas'], ['mais', 'Mais', 'menu']],
   atendente: [['pedidos', 'Pedidos', 'lista'], ['clientes', 'Clientes', 'pessoas'], ['fiado', 'Fiado', 'moeda'], ['mais', 'Mais', 'menu']],
 };
@@ -33,6 +34,8 @@ const TELAS = {
   historico: E.telaHistorico,
   relatorios: P.telaRelatorios,
   pedidos: P.telaPedidos,
+  financeiro: F.telaFinanceiro,
+  custos: F.telaCustos,
   provaveis: P.telaProvaveis,
   clientes: C.telaClientes,
   equipe: (el, ctx) => { const r = C.telaEquipe(el, ctx); el.insertBefore(K.avisoFechamentos(), el.children[1] || null); return r; },
@@ -45,13 +48,13 @@ const TELAS = {
 const TITULOS = {
   produtos: 'Produtos', config: 'Configurações', sinc: 'Sincronização', instalar: 'Instalar no celular', clientes: 'Clientes',
   historico: 'Histórico do estoque', conferir: 'Conferir turnos', vasilhames: 'Vasilhames', fechamentos: 'Fechamentos de caixa',
-  provaveis: 'Prováveis pedidos', pedidos: 'Pedidos',
+  provaveis: 'Prováveis pedidos', pedidos: 'Pedidos', custos: 'Custo e lucro',
 };
 // De onde a tela foi aberta (para o botão voltar)
-const VOLTAR = { historico: ['estoque', 'Estoque'], conferir: ['estoque', 'Estoque'] };
+const VOLTAR = { historico: ['estoque', 'Estoque'], conferir: ['estoque', 'Estoque'], custos: ['financeiro', 'Financeiro'] };
 // Telas extras (fora da barra) que cada perfil pode abrir
 const EXTRAS = {
-  admin: ['clientes', 'produtos', 'config', 'historico', 'conferir', 'fiado', 'vasilhames', 'fechamentos', 'pedidos', 'provaveis'],
+  admin: ['clientes', 'produtos', 'config', 'historico', 'conferir', 'fiado', 'vasilhames', 'fechamentos', 'provaveis', 'equipe', 'relatorios', 'custos'],
   entregador: ['vasilhames', 'fechamentos', 'provaveis'],
   estoquista: ['historico', 'vasilhames'],
   atendente: ['vasilhames', 'provaveis'],
@@ -97,8 +100,11 @@ async function entrarNoApp(user) {
 // ---------------------------------------------------------------------
 function capa(...filhos) {
   limpar(raiz, h('div', { class: 'capa' },
-    h('div', { class: 'marca' }, icone('gota', 'marca-ico'), h('span', {}, 'Taka Entregas')),
-    ...filhos));
+    h('div', { class: 'capa-conteudo' },
+      h('div', { class: 'marca' }, h('span', { class: 'marca-selo' }, icone('gota', 'marca-ico')), h('span', {}, 'Taka Entregas')),
+      h('p', { class: 'capa-frase' }, 'Entregas, estoque, fiado e caixa da sua distribuidora na palma da mão.'),
+      ...filhos),
+    h('div', { class: 'ondas', 'aria-hidden': 'true' })));
 }
 
 function telaLogin() {
@@ -215,6 +221,9 @@ function rotear() {
   const id = permitidas.has(rota) && TELAS[rota] ? rota : abas[0];
 
   limpeza.forEach((f) => f && f()); limpeza = [];
+  // trocar de tela fecha as folhas abertas
+  document.querySelectorAll('.folha-fundo').forEach((f) => f.remove());
+  document.body.classList.remove('com-folha');
   document.querySelectorAll('.aba').forEach((a) => a.classList.toggle('ativa', a.dataset.aba === id || (!abas.includes(id) && a.dataset.aba === (VOLTAR[id] ? VOLTAR[id][0] : 'mais'))));
   limpar(elTela);
   if (TITULOS[id] && !abas.includes(id)) {
@@ -247,12 +256,14 @@ function telaMais(el, ctx) {
       h('strong', {}, p.nome || p.email), h('span', { class: 'suave' }, p.email), etiqueta(PAPEIS[p.papel], 'azul')),
     h('div', { class: 'menu' },
       ctx.eAdmin ? [
-        item('#/pedidos', 'lista', 'Pedidos'),
+        item('#/relatorios', 'doc', 'Relatórios'),
+        item('#/custos', 'calculadora', 'Custo e lucro por galão'),
+        item('#/equipe', 'pessoas', 'Equipe'),
         item('#/fechamentos', 'moeda', 'Fechamentos de caixa'),
         item('#/fiado', 'moeda', 'Fiado'),
         item('#/clientes', 'pessoas', 'Clientes'),
         item('#/produtos', 'gota', 'Produtos e preços'),
-        item('#/config', 'config', 'Configurações'),
+        item('#/config', 'loja', 'Loja online e configurações'),
       ] : null,
       p.papel === 'entregador' ? item('#/fechamentos', 'moeda', 'Meus fechamentos') : null,
       EXTRAS[p.papel].includes('provaveis') ? item('#/provaveis', 'grafico', 'Prováveis pedidos') : null,

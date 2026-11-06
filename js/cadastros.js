@@ -2,7 +2,7 @@
 import * as D from './dados.js';
 import {
   h, limpar, icone, toast, folha, confirmar, campo, entrada, selecao, chave,
-  brl, lerValor, valorParaCampo, normalizar, uuid, linkWhats, vazio, etiqueta, dataHora,
+  brl, lerValor, valorParaCampo, normalizar, uuid, linkWhats, linkMapa, vazio, etiqueta, dataHora,
 } from './ui.js';
 
 const PAPEIS = { admin: 'Admin', entregador: 'Entregador', estoquista: 'Estoquista', atendente: 'Atendente' };
@@ -57,9 +57,10 @@ export function detalheCliente(id, ctx) {
       c.telefone ? h('p', {}, icone('telefone'), c.telefone) : null,
       h('p', {}, icone('caixa'), [c.endereco, c.bairro].filter(Boolean).join(' — ') || 'Sem endereço'),
       c.observacoes ? h('p', { class: 'obs' }, c.observacoes) : null),
-    h('div', { class: 'botoes-lado' },
+    h('div', { class: 'botoes-lado tres-botoes' },
       c.telefone ? h('a', { class: 'btn verde', href: linkWhats(c.telefone), target: '_blank', rel: 'noopener' }, icone('whats'), 'WhatsApp') : null,
-      c.telefone ? h('a', { class: 'btn secundario', href: 'tel:' + c.telefone.replace(/[^\d+]/g, '') }, icone('telefone'), 'Ligar') : null),
+      c.telefone ? h('a', { class: 'btn secundario', href: 'tel:' + c.telefone.replace(/[^\d+]/g, '') }, icone('telefone'), 'Ligar') : null,
+      linkMapa(c, D.config().cidade) ? h('a', { class: 'btn secundario', href: linkMapa(c, D.config().cidade), target: '_blank', rel: 'noopener' }, icone('mapa'), 'Mapa') : null),
     extrasCliente.map((fn) => fn(c, ctx)),
     ctx.eAdmin ? precosEspeciais(c) : null,
     h('p', { class: 'suave pequeno' }, `Cadastrado em ${dataHora(c.criado_em) || 'agora'} por ${nomePerfil(c.criado_por)}`
@@ -286,29 +287,67 @@ function formPerfil(p, ctx) {
 // =====================================================================
 // CONFIGURAÇÕES (admin)
 // =====================================================================
+export function enderecoLoja() {
+  return new URL('loja.html', location.href.split('#')[0]).href;
+}
+
 export function telaConfig(el) {
   const c = D.config();
   const nome = entrada({ value: c.nome_negocio || '' });
+  const cidade = entrada({ value: c.cidade || '', placeholder: 'Ex.: Juazeiro - BA' });
   const pix = entrada({ value: c.chave_pix || '', placeholder: 'CPF, CNPJ, e-mail, telefone ou chave aleatória' });
   const recebedor = entrada({ value: c.nome_recebedor_pix || '', placeholder: 'Nome que aparece no Pix' });
   const cobranca = h('textarea', { class: 'entrada', rows: 4 }, c.msg_cobranca || '');
   const oferta = h('textarea', { class: 'entrada', rows: 3 }, c.msg_oferta || '');
   const dias = entrada({ type: 'number', inputmode: 'numeric', min: 0, value: c.dias_aviso_recorrente ?? 2 });
-  el.append(h('div', { class: 'cartao form' },
-    campo('Nome do negócio', nome),
-    campo('Chave Pix', pix), campo('Nome do recebedor Pix', recebedor),
-    campo('Mensagem de cobrança (fiado)', cobranca, 'Use {nome}, {valor}, {pix} e {negocio}.'),
-    campo('Mensagem de oferta (prováveis pedidos)', oferta, 'Use {nome} e {negocio}.'),
-    campo('Avisar prováveis pedidos com quantos dias de antecedência', dias),
-    h('button', { class: 'btn primario grande', onclick: async () => {
-      const r = await D.direto(D.sb.from('configuracoes').update({
-        nome_negocio: nome.value.trim() || 'Minha Distribuidora', chave_pix: pix.value.trim(),
-        nome_recebedor_pix: recebedor.value.trim(), msg_cobranca: cobranca.value, msg_oferta: oferta.value,
-        dias_aviso_recorrente: parseInt(dias.value, 10) || 0,
-      }).eq('id', 1));
-      if (r.erro) return toast(r.rede ? 'Precisa de internet.' : r.erro, 'erro');
-      toast('Configurações salvas.'); D.baixar('configuracoes');
-    } }, 'Salvar')));
+  const diasTrab = entrada({ type: 'number', inputmode: 'numeric', min: 1, max: 31, value: c.dias_trabalho_mes ?? 26 });
+  const lojaAtiva = chave('Loja online ligada (clientes podem pedir pelo link)', !!c.loja_ativa);
+  const lojaAviso = h('textarea', { class: 'entrada', rows: 2, placeholder: 'Ex.: Promoção da semana: 2 galões por R$ 26' }, c.loja_aviso || '');
+  const lojaZap = entrada({ value: c.loja_whatsapp || '', type: 'tel', inputmode: 'tel', placeholder: '(74) 98888-7777' });
+  const link = enderecoLoja();
+  const msgLoja = `Agora você pode pedir sua água pelo celular, a qualquer hora: ${link}`;
+
+  const salvar = async () => {
+    const r = await D.direto(D.sb.from('configuracoes').update({
+      nome_negocio: nome.value.trim() || 'Minha Distribuidora', chave_pix: pix.value.trim(),
+      nome_recebedor_pix: recebedor.value.trim(), msg_cobranca: cobranca.value, msg_oferta: oferta.value,
+      dias_aviso_recorrente: parseInt(dias.value, 10) || 0,
+    }).eq('id', 1));
+    if (r.erro) return toast(r.rede ? 'Precisa de internet.' : r.erro, 'erro');
+    // campos novos (precisam do supabase/melhorias-1.sql)
+    const r2 = await D.direto(D.sb.from('configuracoes').update({
+      cidade: cidade.value.trim(), dias_trabalho_mes: Math.min(31, Math.max(1, parseInt(diasTrab.value, 10) || 26)),
+      loja_ativa: lojaAtiva.input.checked, loja_aviso: lojaAviso.value.trim(), loja_whatsapp: lojaZap.value.trim(),
+    }).eq('id', 1));
+    if (r2.erro) toast('Salvo, menos loja/cidade/meta: falta rodar o supabase/melhorias-1.sql (veja o GUIA).', 'erro');
+    else toast('Configurações salvas.');
+    D.baixar('configuracoes');
+  };
+
+  el.append(
+    h('div', { class: 'cartao form' },
+      h('h2', {}, 'Negócio'),
+      campo('Nome do negócio', nome),
+      campo('Cidade', cidade, 'Usada para abrir o endereço dos clientes no mapa.'),
+      campo('Chave Pix', pix), campo('Nome do recebedor Pix', recebedor),
+      campo('Dias de trabalho no mês', diasTrab, 'Usado para calcular a meta diária de vendas.')),
+    h('div', { class: 'cartao form loja-config' },
+      h('h2', {}, icone('loja'), ' Loja online'),
+      h('p', { class: 'suave' }, 'Um link para o cliente pedir sozinho, sem instalar nada. Ele é reconhecido pelo telefone e o pedido cai direto em Pedidos.'),
+      lojaAtiva.el,
+      campo('Recado ou promoção na loja', lojaAviso),
+      campo('WhatsApp do negócio', lojaZap, 'Aparece na loja como "falar com a gente".'),
+      h('div', { class: 'copiar' }, h('code', {}, link),
+        h('button', { class: 'btn secundario', onclick: () => navigator.clipboard.writeText(link).then(() => toast('Link copiado.')) }, 'Copiar')),
+      h('div', { class: 'botoes-lado' },
+        h('a', { class: 'btn verde', href: 'https://wa.me/?text=' + encodeURIComponent(msgLoja), target: '_blank', rel: 'noopener' }, icone('whats'), 'Divulgar'),
+        h('a', { class: 'btn secundario', href: link, target: '_blank', rel: 'noopener' }, 'Ver a loja'))),
+    h('div', { class: 'cartao form' },
+      h('h2', {}, 'Mensagens'),
+      campo('Mensagem de cobrança (fiado)', cobranca, 'Use {nome}, {valor}, {pix} e {negocio}.'),
+      campo('Mensagem de oferta (prováveis pedidos)', oferta, 'Use {nome} e {negocio}.'),
+      campo('Avisar prováveis pedidos com quantos dias de antecedência', dias)),
+    h('button', { class: 'btn primario grande', onclick: salvar }, 'Salvar configurações'));
 }
 
 // =====================================================================
