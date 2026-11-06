@@ -36,8 +36,8 @@ Ainda no Supabase, no menu **Authentication**:
    - Desligue **Allow new users to sign up**. Assim só entra quem você convidar.
    - Pode deixar **Confirm email** ligado.
 2. **URL Configuration**:
-   - **Site URL**: `https://1barreto.github.io/aplicativoentregastaka/`
-   - Em **Redirect URLs**, adicione: `https://1barreto.github.io/aplicativoentregastaka/**`
+   - **Site URL**: `https://1barreto.github.io/AplicativoEntregasTaka/`
+   - Em **Redirect URLs**, adicione: `https://1barreto.github.io/AplicativoEntregasTaka/**`
 
    Sem isso, o link do e-mail de convite e o de "esqueci a senha" não voltam para o app.
 3. **Emails** (opcional): você pode traduzir os textos dos e-mails de **Invite user** e **Reset password** para português. O link dentro deles tem que continuar como `{{ .ConfirmationURL }}`.
@@ -73,7 +73,7 @@ A chave anon fica visível para quem abrir o app, e isso é normal: ela sozinha 
    - **Branch**: `main` e pasta `/ (root)`
    - Clique em **Save**.
 4. Espere 1 ou 2 minutos e recarregue a página. Vai aparecer o endereço:
-   `https://1barreto.github.io/aplicativoentregastaka/`
+   `https://1barreto.github.io/AplicativoEntregasTaka/`
 
 > O GitHub Pages gratuito só publica repositório **público**. O código ficar público não expõe nenhum dado: os dados estão no Supabase, protegidos por login.
 
@@ -92,7 +92,7 @@ Sempre que alguém mudar algo no `main`, o site atualiza sozinho em 1 ou 2 minut
    ```
 
    Deve aparecer `1 row affected`.
-3. Abra `https://1barreto.github.io/aplicativoentregastaka/` e entre com esse e-mail e senha.
+3. Abra `https://1barreto.github.io/AplicativoEntregasTaka/` e entre com esse e-mail e senha.
 4. Em **Mais › Configurações**, preencha:
    - nome do negócio
    - chave Pix e nome de quem recebe (vão na mensagem do botão Cobrar)
