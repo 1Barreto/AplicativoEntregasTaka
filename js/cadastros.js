@@ -325,6 +325,7 @@ function formPerfil(p, ctx) {
     campo('Nome', nome), campo('Função', papel), ativo.el,
     eu ? h('p', { class: 'suave pequeno' }, 'Você não pode mudar sua própria função nem se desativar.') : null,
     h('p', { class: 'suave pequeno' }, 'Desativar bloqueia o acesso na hora, mas mantém todo o histórico da pessoa.'),
+    eu ? null : h('button', { class: 'btn-texto perigo', onclick: () => excluirPerfil(p, f) }, 'Excluir esta pessoa'),
   ], { rodape: [h('button', { class: 'btn primario grande', onclick: async () => {
     const dados = { nome: nome.value.trim() };
     if (!eu) { dados.papel = papel.value; dados.ativo = ativo.input.checked; }
@@ -332,6 +333,20 @@ function formPerfil(p, ctx) {
     if (r.erro) return toast(r.rede ? 'Precisa de internet.' : r.erro, 'erro');
     toast('Salvo.'); f.fechar(); D.baixar('perfis');
   } }, 'Salvar')] });
+}
+
+// Apaga de vez (só quem ainda não tem histórico; os outros a gente desativa)
+async function excluirPerfil(p, f) {
+  if (!(await confirmar(`Excluir ${p.nome || p.email} de vez? A pessoa perde o acesso e some da lista.`, { sim: 'Excluir', perigo: true }))) return;
+  try {
+    const { error } = await D.sb.functions.invoke('convidar', { body: { acao: 'excluir', id: p.id } });
+    if (error) {
+      let msg = error.message;
+      try { const j = await error.context.json(); msg = j.erro || msg; } catch { /* sem corpo */ }
+      return toast(msg, 'erro');
+    }
+  } catch { return toast('Precisa de internet.', 'erro'); }
+  toast('Pessoa excluída.'); f.fechar(); D.baixar('perfis');
 }
 
 // =====================================================================
